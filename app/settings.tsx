@@ -132,13 +132,6 @@ export default function SettingsScreen() {
           <Divider />
           <SettingRow
             type="nav"
-            label="Subscription Plan"
-            subtitle="Free Member"
-            onPress={() => showAlert("Upgrade", "Premium plans coming soon.")}
-          />
-          <Divider />
-          <SettingRow
-            type="nav"
             label="Connected Accounts"
             subtitle="Spotify, Apple Music"
             onPress={() => showAlert("Connected Accounts", "Account linking coming soon.")}
@@ -288,7 +281,7 @@ export default function SettingsScreen() {
 
         {/* About */}
         <Section title="About">
-          <SettingRow type="info" label="Version" value="1.0.0" />
+          <SettingRow type="info" label="Caffy" value="v1.0.0" />
           <Divider />
           <SettingRow
             type="nav"

@@ -1,3 +1,4 @@
+import { MC } from "@/constants/theme";
 import React, { useState } from "react";
 import {
   FlatList,
@@ -10,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MC } from "@/constants/theme";
 
 const FEATURED = {
   name: "Kendrick Lamar",
@@ -21,31 +21,142 @@ const FEATURED = {
 };
 
 const ARTISTS = [
-  { id: "1", name: "SZA", genre: "R&B / Soul", color: "#5E3E82", initials: "SZ" },
-  { id: "2", name: "Frank Ocean", genre: "Alternative R&B", color: "#3E5E82", initials: "FO" },
-  { id: "3", name: "Tyler, The Creator", genre: "Hip-Hop", color: "#3E825E", initials: "TC" },
-  { id: "4", name: "Billie Eilish", genre: "Pop / Alt", color: "#823E5E", initials: "BE" },
-  { id: "5", name: "The Weeknd", genre: "R&B", color: "#825E3E", initials: "TW" },
-  { id: "6", name: "Doja Cat", genre: "Pop / Rap", color: "#3E8282", initials: "DC" },
-  { id: "7", name: "Drake", genre: "Hip-Hop", color: "#6E5E3E", initials: "DR" },
+  {
+    id: "1",
+    name: "SZA",
+    genre: "R&B / Soul",
+    color: "#5E3E82",
+    initials: "SZ",
+  },
+  {
+    id: "2",
+    name: "Frank Ocean",
+    genre: "Alternative R&B",
+    color: "#3E5E82",
+    initials: "FO",
+  },
+  {
+    id: "3",
+    name: "Tyler, The Creator",
+    genre: "Hip-Hop",
+    color: "#3E825E",
+    initials: "TC",
+  },
+  {
+    id: "4",
+    name: "Billie Eilish",
+    genre: "Pop / Alt",
+    color: "#823E5E",
+    initials: "BE",
+  },
+  {
+    id: "5",
+    name: "The Weeknd",
+    genre: "R&B",
+    color: "#825E3E",
+    initials: "TW",
+  },
+  {
+    id: "6",
+    name: "Doja Cat",
+    genre: "Pop / Rap",
+    color: "#3E8282",
+    initials: "DC",
+  },
+  {
+    id: "7",
+    name: "Drake",
+    genre: "Hip-Hop",
+    color: "#6E5E3E",
+    initials: "DR",
+  },
 ];
 
 const TRENDING = [
-  { id: "1", title: "Not Like Us", artist: "Kendrick Lamar", plays: "847M plays", color: "#7A1E2A", rank: "01" },
-  { id: "2", title: "Snooze", artist: "SZA", plays: "623M plays", color: "#5E3E82", rank: "02" },
-  { id: "3", title: "Blinding Lights", artist: "The Weeknd", plays: "4.2B plays", color: "#825E3E", rank: "03" },
-  { id: "4", title: "Birds of a Feather", artist: "Billie Eilish", plays: "412M plays", color: "#823E5E", rank: "04" },
-  { id: "5", title: "Timeless", artist: "The Weeknd", plays: "389M plays", color: "#3E5E82", rank: "05" },
+  {
+    id: "1",
+    title: "Not Like Us",
+    artist: "Kendrick Lamar",
+    plays: "847M plays",
+    color: "#7A1E2A",
+    rank: "01",
+  },
+  {
+    id: "2",
+    title: "Snooze",
+    artist: "SZA",
+    plays: "623M plays",
+    color: "#5E3E82",
+    rank: "02",
+  },
+  {
+    id: "3",
+    title: "Blinding Lights",
+    artist: "The Weeknd",
+    plays: "4.2B plays",
+    color: "#825E3E",
+    rank: "03",
+  },
+  {
+    id: "4",
+    title: "Birds of a Feather",
+    artist: "Billie Eilish",
+    plays: "412M plays",
+    color: "#823E5E",
+    rank: "04",
+  },
+  {
+    id: "5",
+    title: "Timeless",
+    artist: "The Weeknd",
+    plays: "389M plays",
+    color: "#3E5E82",
+    rank: "05",
+  },
 ];
 
 const NEW_RELEASES = [
-  { id: "1", title: "GNX", artist: "Kendrick Lamar", meta: "Album • 12 tracks", color: "#7A1E2A", initials: "GNX" },
-  { id: "2", title: "Chromakopia", artist: "Tyler, The Creator", meta: "Album • 14 tracks", color: "#3E825E", initials: "CHR" },
-  { id: "3", title: "Hit Me Hard and Soft", artist: "Billie Eilish", meta: "Album • 10 tracks", color: "#823E5E", initials: "HMH" },
-  { id: "4", title: "Lamin", artist: "SZA", meta: "Single", color: "#5E3E82", initials: "LAM" },
+  {
+    id: "1",
+    title: "GNX",
+    artist: "Kendrick Lamar",
+    meta: "Album • 12 tracks",
+    color: "#7A1E2A",
+    initials: "GNX",
+  },
+  {
+    id: "2",
+    title: "Chromakopia",
+    artist: "Tyler, The Creator",
+    meta: "Album • 14 tracks",
+    color: "#3E825E",
+    initials: "CHR",
+  },
+  {
+    id: "3",
+    title: "Hit Me Hard and Soft",
+    artist: "Billie Eilish",
+    meta: "Album • 10 tracks",
+    color: "#823E5E",
+    initials: "HMH",
+  },
+  {
+    id: "4",
+    title: "Lamin",
+    artist: "SZA",
+    meta: "Single",
+    color: "#5E3E82",
+    initials: "LAM",
+  },
 ];
 
-function SectionHeader({ title, onPress }: { title: string; onPress?: () => void }) {
+function SectionHeader({
+  title,
+  onPress,
+}: {
+  title: string;
+  onPress?: () => void;
+}) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -64,8 +175,12 @@ function ArtistCard({ item }: { item: (typeof ARTISTS)[0] }) {
       <View style={[styles.artistAvatar, { backgroundColor: item.color }]}>
         <Text style={styles.artistInitials}>{item.initials}</Text>
       </View>
-      <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
-      <Text style={styles.artistGenre} numberOfLines={1}>{item.genre}</Text>
+      <Text style={styles.artistName} numberOfLines={1}>
+        {item.name}
+      </Text>
+      <Text style={styles.artistGenre} numberOfLines={1}>
+        {item.genre}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -77,8 +192,12 @@ function TrendingCard({ item }: { item: (typeof TRENDING)[0] }) {
         <Text style={styles.trendingRank}>{item.rank}</Text>
       </View>
       <View style={styles.trendingBottom}>
-        <Text style={styles.trendingTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.trendingArtist} numberOfLines={1}>{item.artist}</Text>
+        <Text style={styles.trendingTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Text style={styles.trendingArtist} numberOfLines={1}>
+          {item.artist}
+        </Text>
         <Text style={styles.trendingPlays}>{item.plays}</Text>
       </View>
     </TouchableOpacity>
@@ -121,6 +240,12 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Wordmark */}
+        <View style={styles.wordmarkRow}>
+          <Text style={styles.wordmark}>caffy</Text>
+          <Text style={styles.wordmarkNote}>☕️</Text>
+        </View>
+
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -159,7 +284,7 @@ export default function HomeScreen() {
               <Text style={styles.featuredTagline}>{FEATURED.tagline}</Text>
               <Text style={styles.featuredGenre}>{FEATURED.genre}</Text>
               <TouchableOpacity style={styles.playNowBtn}>
-                <Text style={styles.playNowText}>▶  Listen Now</Text>
+                <Text style={styles.playNowText}>▶ Listen Now</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.featuredAvatarCircle}>
@@ -221,6 +346,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  wordmarkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingTop: 4,
+    paddingBottom: 20,
+  },
+  wordmark: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: MC.accent,
+    letterSpacing: 3,
+    textTransform: "lowercase",
+  },
+  wordmarkNote: {
+    fontSize: 16,
+    color: MC.accentLight,
   },
   greeting: {
     fontSize: 13,
