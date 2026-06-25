@@ -1,8 +1,23 @@
-# Welcome to your Expo app 👋
+# caffy ♪
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A music streaming mobile application built with React Native and Expo. Caffy is a learning project focused on building a clean, dark-themed UI for discovering and organising music.
 
-## Get started
+## Features
+
+- **Home** — Discover new music with a featured artist card, artist browsing, trending tracks, and new releases
+- **Library** — Organise saved music across Favourites, Downloads, and Playlists tabs
+- **Profile** — View listening stats, top artists, and listening history
+- **Settings** — Control audio quality, downloads, notifications, and privacy — accessed via the profile page
+
+## Tech Stack
+
+- [Expo](https://expo.dev) (v54) with [Expo Router](https://docs.expo.dev/router/introduction/) for file-based navigation
+- React Native with TypeScript
+- `react-native-safe-area-context` for safe area handling
+- `react-native-reanimated` for animations
+- SF Symbols (iOS) / Material Icons (Android) via `expo-symbols` and `@expo/vector-icons`
+
+## Getting Started
 
 1. Install dependencies
 
@@ -10,41 +25,36 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Start the development server
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Open the app in one of:
+   - [iOS Simulator](https://docs.expo.dev/workflow/ios-simulator/)
+   - [Android Emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+   - [Expo Go](https://expo.dev/go)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+```
+app/
+  (tabs)/
+    index.tsx      # Home screen
+    library.tsx    # Library screen
+    profile.tsx    # Profile screen
+  settings.tsx     # Settings (navigated to from Profile)
+  _layout.tsx      # Root stack layout
 
-## Get a fresh project
+components/
+  ui/
+    icon-symbol.tsx  # Cross-platform icon component
 
-When you're ready, run:
-
-```bash
-npm run reset-project
+constants/
+  theme.ts         # Colour palette and font tokens
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Branch
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Active development is on the `new-feature-initialisations` branch.
