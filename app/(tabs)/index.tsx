@@ -1,7 +1,19 @@
 import { MC } from "@/constants/theme";
-import React, { useState } from "react";
+import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
+  getMe,
+  getNewReleases,
+  getTopArtists,
+  getTopTracks,
+  SpotifyAlbum,
+  SpotifyArtist,
+  SpotifyTrack,
+} from "@/services/spotify";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
   FlatList,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,151 +24,32 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const FEATURED = {
-  name: "Kendrick Lamar",
-  tagline: "Pulitzer Prize Winner",
-  genre: "Hip-Hop / Rap",
-  color: "#7A1E2A",
-  initials: "KL",
-};
-
-const ARTISTS = [
-  {
-    id: "1",
-    name: "SZA",
-    genre: "R&B / Soul",
-    color: "#5E3E82",
-    initials: "SZ",
-  },
-  {
-    id: "2",
-    name: "Frank Ocean",
-    genre: "Alternative R&B",
-    color: "#3E5E82",
-    initials: "FO",
-  },
-  {
-    id: "3",
-    name: "Tyler, The Creator",
-    genre: "Hip-Hop",
-    color: "#3E825E",
-    initials: "TC",
-  },
-  {
-    id: "4",
-    name: "Billie Eilish",
-    genre: "Pop / Alt",
-    color: "#823E5E",
-    initials: "BE",
-  },
-  {
-    id: "5",
-    name: "The Weeknd",
-    genre: "R&B",
-    color: "#825E3E",
-    initials: "TW",
-  },
-  {
-    id: "6",
-    name: "Doja Cat",
-    genre: "Pop / Rap",
-    color: "#3E8282",
-    initials: "DC",
-  },
-  {
-    id: "7",
-    name: "Drake",
-    genre: "Hip-Hop",
-    color: "#6E5E3E",
-    initials: "DR",
-  },
+const AVATAR_COLORS = [
+  "#7A1E2A", "#5E3E82", "#3E5E82", "#3E825E",
+  "#823E5E", "#825E3E", "#3E8282", "#6E5E3E",
 ];
 
-const TRENDING = [
-  {
-    id: "1",
-    title: "Not Like Us",
-    artist: "Kendrick Lamar",
-    plays: "847M plays",
-    color: "#7A1E2A",
-    rank: "01",
-  },
-  {
-    id: "2",
-    title: "Snooze",
-    artist: "SZA",
-    plays: "623M plays",
-    color: "#5E3E82",
-    rank: "02",
-  },
-  {
-    id: "3",
-    title: "Blinding Lights",
-    artist: "The Weeknd",
-    plays: "4.2B plays",
-    color: "#825E3E",
-    rank: "03",
-  },
-  {
-    id: "4",
-    title: "Birds of a Feather",
-    artist: "Billie Eilish",
-    plays: "412M plays",
-    color: "#823E5E",
-    rank: "04",
-  },
-  {
-    id: "5",
-    title: "Timeless",
-    artist: "The Weeknd",
-    plays: "389M plays",
-    color: "#3E5E82",
-    rank: "05",
-  },
-];
+function colorForIndex(index: number) {
+  return AVATAR_COLORS[index % AVATAR_COLORS.length];
+}
 
-const NEW_RELEASES = [
-  {
-    id: "1",
-    title: "GNX",
-    artist: "Kendrick Lamar",
-    meta: "Album • 12 tracks",
-    color: "#7A1E2A",
-    initials: "GNX",
-  },
-  {
-    id: "2",
-    title: "Chromakopia",
-    artist: "Tyler, The Creator",
-    meta: "Album • 14 tracks",
-    color: "#3E825E",
-    initials: "CHR",
-  },
-  {
-    id: "3",
-    title: "Hit Me Hard and Soft",
-    artist: "Billie Eilish",
-    meta: "Album • 10 tracks",
-    color: "#823E5E",
-    initials: "HMH",
-  },
-  {
-    id: "4",
-    title: "Lamin",
-    artist: "SZA",
-    meta: "Single",
-    color: "#5E3E82",
-    initials: "LAM",
-  },
-];
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
 
-function SectionHeader({
-  title,
-  onPress,
-}: {
-  title: string;
-  onPress?: () => void;
-}) {
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function SectionHeader({ title, onPress }: { title: string; onPress?: () => void }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -169,52 +62,65 @@ function SectionHeader({
   );
 }
 
-function ArtistCard({ item }: { item: (typeof ARTISTS)[0] }) {
+function ArtistCard({ item, index }: { item: SpotifyArtist; index: number }) {
+  const imageUrl = item.images[0]?.url;
+  const color = colorForIndex(index);
   return (
     <TouchableOpacity style={styles.artistCard} activeOpacity={0.75}>
-      <View style={[styles.artistAvatar, { backgroundColor: item.color }]}>
-        <Text style={styles.artistInitials}>{item.initials}</Text>
-      </View>
-      <Text style={styles.artistName} numberOfLines={1}>
-        {item.name}
-      </Text>
-      <Text style={styles.artistGenre} numberOfLines={1}>
-        {item.genre}
-      </Text>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.artistAvatar} />
+      ) : (
+        <View style={[styles.artistAvatar, { backgroundColor: color }]}>
+          <Text style={styles.artistInitials}>{initials(item.name)}</Text>
+        </View>
+      )}
+      <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
+      <Text style={styles.artistGenre} numberOfLines={1}>{item.genres[0] ?? "Artist"}</Text>
     </TouchableOpacity>
   );
 }
 
-function TrendingCard({ item }: { item: (typeof TRENDING)[0] }) {
+function TrendingCard({ item, index }: { item: SpotifyTrack; index: number }) {
+  const imageUrl = item.album.images[0]?.url;
+  const color = colorForIndex(index);
+  const rank = String(index + 1).padStart(2, "0");
   return (
     <TouchableOpacity style={styles.trendingCard} activeOpacity={0.75}>
-      <View style={[styles.trendingTop, { backgroundColor: item.color }]}>
-        <Text style={styles.trendingRank}>{item.rank}</Text>
+      <View style={[styles.trendingTop, { backgroundColor: color }]}>
+        {imageUrl && (
+          <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFillObject} />
+        )}
+        <Text style={styles.trendingRank}>{rank}</Text>
       </View>
       <View style={styles.trendingBottom}>
-        <Text style={styles.trendingTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.trendingArtist} numberOfLines={1}>
-          {item.artist}
-        </Text>
-        <Text style={styles.trendingPlays}>{item.plays}</Text>
+        <Text style={styles.trendingTitle} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.trendingArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
+        <Text style={styles.trendingPlays}>{item.popularity}% popularity</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-function ReleaseRow({ item }: { item: (typeof NEW_RELEASES)[0] }) {
+function ReleaseRow({ item, index }: { item: SpotifyAlbum; index: number }) {
   const [liked, setLiked] = useState(false);
+  const imageUrl = item.images[0]?.url;
+  const color = colorForIndex(index);
+  const meta =
+    item.album_type.charAt(0).toUpperCase() + item.album_type.slice(1) +
+    (item.total_tracks > 1 ? ` • ${item.total_tracks} tracks` : "");
   return (
     <TouchableOpacity style={styles.releaseRow} activeOpacity={0.75}>
-      <View style={[styles.releaseArt, { backgroundColor: item.color }]}>
-        <Text style={styles.releaseInitials}>{item.initials}</Text>
-      </View>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.releaseArt} />
+      ) : (
+        <View style={[styles.releaseArt, { backgroundColor: color }]}>
+          <Text style={styles.releaseInitials}>{initials(item.name)}</Text>
+        </View>
+      )}
       <View style={styles.releaseInfo}>
-        <Text style={styles.releaseTitle}>{item.title}</Text>
-        <Text style={styles.releaseArtist}>{item.artist}</Text>
-        <Text style={styles.releaseMeta}>{item.meta}</Text>
+        <Text style={styles.releaseTitle}>{item.name}</Text>
+        <Text style={styles.releaseArtist}>{item.artists[0]?.name}</Text>
+        <Text style={styles.releaseMeta}>{meta}</Text>
       </View>
       <TouchableOpacity
         style={styles.likeButton}
@@ -230,7 +136,40 @@ function ReleaseRow({ item }: { item: (typeof NEW_RELEASES)[0] }) {
 }
 
 export default function HomeScreen() {
+  const { token } = useSpotifyAuth();
   const [search, setSearch] = useState("");
+  const [userName, setUserName] = useState("");
+  const [userImage, setUserImage] = useState<string | null>(null);
+  const [artists, setArtists] = useState<SpotifyArtist[]>([]);
+  const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
+  const [releases, setReleases] = useState<SpotifyAlbum[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      getMe(token),
+      getTopArtists(token),
+      getTopTracks(token),
+      getNewReleases(token),
+    ]).then(([me, topArtists, topTracks, newReleases]) => {
+      setUserName(me.display_name);
+      setUserImage(me.images[0]?.url ?? null);
+      setArtists(topArtists);
+      setTracks(topTracks);
+      setReleases(newReleases);
+    }).finally(() => setLoading(false));
+  }, [token]);
+
+  const featured = artists[0];
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={MC.accent} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -249,11 +188,15 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Good morning</Text>
-            <Text style={styles.userName}>Kenneth</Text>
+            <Text style={styles.greeting}>{greeting()}</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
           <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>KJ</Text>
+            {userImage ? (
+              <Image source={{ uri: userImage }} style={styles.headerAvatarImage} />
+            ) : (
+              <Text style={styles.headerAvatarText}>{initials(userName)}</Text>
+            )}
           </View>
         </View>
 
@@ -271,36 +214,48 @@ export default function HomeScreen() {
         </View>
 
         {/* Featured Card */}
-        <TouchableOpacity
-          style={[styles.featuredCard, { backgroundColor: FEATURED.color }]}
-          activeOpacity={0.85}
-        >
-          <View style={styles.featuredBadge}>
-            <Text style={styles.featuredBadgeText}>Editor's Pick</Text>
-          </View>
-          <View style={styles.featuredContent}>
-            <View style={styles.featuredText}>
-              <Text style={styles.featuredName}>{FEATURED.name}</Text>
-              <Text style={styles.featuredTagline}>{FEATURED.tagline}</Text>
-              <Text style={styles.featuredGenre}>{FEATURED.genre}</Text>
-              <TouchableOpacity style={styles.playNowBtn}>
-                <Text style={styles.playNowText}>▶ Listen Now</Text>
-              </TouchableOpacity>
+        {featured && (
+          <TouchableOpacity
+            style={[styles.featuredCard, { backgroundColor: colorForIndex(0) }]}
+            activeOpacity={0.85}
+          >
+            {featured.images[0]?.url && (
+              <Image
+                source={{ uri: featured.images[0].url }}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 20, opacity: 0.4 }]}
+              />
+            )}
+            <View style={styles.featuredBadge}>
+              <Text style={styles.featuredBadgeText}>Your Top Artist</Text>
             </View>
-            <View style={styles.featuredAvatarCircle}>
-              <Text style={styles.featuredAvatarText}>{FEATURED.initials}</Text>
+            <View style={styles.featuredContent}>
+              <View style={styles.featuredText}>
+                <Text style={styles.featuredName}>{featured.name}</Text>
+                <Text style={styles.featuredTagline}>{featured.genres[0] ?? ""}</Text>
+                <Text style={styles.featuredGenre}>{featured.genres[1] ?? ""}</Text>
+                <TouchableOpacity style={styles.playNowBtn}>
+                  <Text style={styles.playNowText}>▶ Listen Now</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.featuredAvatarCircle}>
+                {featured.images[0]?.url ? (
+                  <Image source={{ uri: featured.images[0].url }} style={styles.featuredAvatarImage} />
+                ) : (
+                  <Text style={styles.featuredAvatarText}>{initials(featured.name)}</Text>
+                )}
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        )}
 
         {/* Discover Artists */}
         <SectionHeader title="Discover Artists" onPress={() => {}} />
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={ARTISTS}
+          data={artists}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ArtistCard item={item} />}
+          renderItem={({ item, index }) => <ArtistCard item={item} index={index} />}
           contentContainerStyle={styles.horizontalList}
         />
 
@@ -309,17 +264,17 @@ export default function HomeScreen() {
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={TRENDING}
+          data={tracks}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <TrendingCard item={item} />}
+          renderItem={({ item, index }) => <TrendingCard item={item} index={index} />}
           contentContainerStyle={styles.horizontalList}
         />
 
         {/* New Releases */}
         <SectionHeader title="New Releases" onPress={() => {}} />
         <View style={styles.releaseList}>
-          {NEW_RELEASES.map((item) => (
-            <ReleaseRow key={item.id} item={item} />
+          {releases.map((item, index) => (
+            <ReleaseRow key={item.id} item={item} index={index} />
           ))}
         </View>
 
@@ -330,16 +285,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MC.bg,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 8,
-  },
+  container: { flex: 1, backgroundColor: MC.bg },
+  centered: { alignItems: "center", justifyContent: "center" },
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: 8 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -362,21 +311,9 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     textTransform: "lowercase",
   },
-  wordmarkNote: {
-    fontSize: 16,
-    color: MC.accentLight,
-  },
-  greeting: {
-    fontSize: 13,
-    color: MC.textSecondary,
-    letterSpacing: 0.3,
-  },
-  userName: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: MC.textPrimary,
-    letterSpacing: -0.5,
-  },
+  wordmarkNote: { fontSize: 16, color: MC.accentLight },
+  greeting: { fontSize: 13, color: MC.textSecondary, letterSpacing: 0.3 },
+  userName: { fontSize: 26, fontWeight: "700", color: MC.textPrimary, letterSpacing: -0.5 },
   headerAvatar: {
     width: 42,
     height: 42,
@@ -384,12 +321,10 @@ const styles = StyleSheet.create({
     backgroundColor: MC.accent,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  headerAvatarText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
+  headerAvatarImage: { width: 42, height: 42, borderRadius: 21 },
+  headerAvatarText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -402,17 +337,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: MC.border,
   },
-  searchIcon: {
-    fontSize: 20,
-    color: MC.textMuted,
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: MC.textPrimary,
-    padding: 0,
-  },
+  searchIcon: { fontSize: 20, color: MC.textMuted, marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 15, color: MC.textPrimary, padding: 0 },
   featuredCard: {
     marginHorizontal: 20,
     marginBottom: 28,
@@ -441,10 +367,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
-  featuredText: {
-    flex: 1,
-    paddingRight: 16,
-  },
+  featuredText: { flex: 1, paddingRight: 16 },
   featuredName: {
     fontSize: 24,
     fontWeight: "800",
@@ -452,16 +375,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 4,
   },
-  featuredTagline: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
-    marginBottom: 2,
-  },
-  featuredGenre: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.55)",
-    marginBottom: 16,
-  },
+  featuredTagline: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 2 },
+  featuredGenre: { fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 },
   playNowBtn: {
     alignSelf: "flex-start",
     backgroundColor: "#fff",
@@ -469,11 +384,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
   },
-  playNowText: {
-    color: "#0D0B0E",
-    fontWeight: "700",
-    fontSize: 13,
-  },
+  playNowText: { color: "#0D0B0E", fontWeight: "700", fontSize: 13 },
   featuredAvatarCircle: {
     width: 80,
     height: 80,
@@ -481,12 +392,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  featuredAvatarText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 24,
-  },
+  featuredAvatarImage: { width: 80, height: 80, borderRadius: 40 },
+  featuredAvatarText: { color: "#fff", fontWeight: "800", fontSize: 24 },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -494,26 +403,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 14,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: MC.textPrimary,
-    letterSpacing: -0.3,
-  },
-  seeAll: {
-    fontSize: 13,
-    color: MC.accent,
-    fontWeight: "600",
-  },
-  horizontalList: {
-    paddingHorizontal: 20,
-    gap: 14,
-    marginBottom: 28,
-  },
-  artistCard: {
-    width: 82,
-    alignItems: "center",
-  },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: MC.textPrimary, letterSpacing: -0.3 },
+  seeAll: { fontSize: 13, color: MC.accent, fontWeight: "600" },
+  horizontalList: { paddingHorizontal: 20, gap: 14, marginBottom: 28 },
+  artistCard: { width: 82, alignItems: "center" },
   artistAvatar: {
     width: 70,
     height: 70,
@@ -522,64 +415,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
   },
-  artistInitials: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 20,
-  },
-  artistName: {
-    color: MC.textPrimary,
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  artistGenre: {
-    color: MC.textMuted,
-    fontSize: 10,
-    textAlign: "center",
-    marginTop: 2,
-  },
-  trendingCard: {
-    width: 136,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: MC.surface,
-  },
-  trendingTop: {
-    height: 96,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  artistInitials: { color: "#fff", fontWeight: "800", fontSize: 20 },
+  artistName: { color: MC.textPrimary, fontSize: 12, fontWeight: "600", textAlign: "center" },
+  artistGenre: { color: MC.textMuted, fontSize: 10, textAlign: "center", marginTop: 2 },
+  trendingCard: { width: 136, borderRadius: 14, overflow: "hidden", backgroundColor: MC.surface },
+  trendingTop: { height: 96, alignItems: "center", justifyContent: "center" },
   trendingRank: {
     color: "rgba(255,255,255,0.35)",
     fontSize: 42,
     fontWeight: "900",
     letterSpacing: -2,
   },
-  trendingBottom: {
-    padding: 12,
-    gap: 2,
-  },
-  trendingTitle: {
-    color: MC.textPrimary,
-    fontWeight: "700",
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  trendingArtist: {
-    color: MC.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  trendingPlays: {
-    color: MC.textMuted,
-    fontSize: 10,
-    marginTop: 4,
-  },
-  releaseList: {
-    paddingHorizontal: 20,
-    gap: 4,
-  },
+  trendingBottom: { padding: 12, gap: 2 },
+  trendingTitle: { color: MC.textPrimary, fontWeight: "700", fontSize: 13, lineHeight: 17 },
+  trendingArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
+  trendingPlays: { color: MC.textMuted, fontSize: 10, marginTop: 4 },
+  releaseList: { paddingHorizontal: 20, gap: 4 },
   releaseRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -601,32 +452,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: -0.5,
   },
-  releaseInfo: {
-    flex: 1,
-  },
-  releaseTitle: {
-    color: MC.textPrimary,
-    fontWeight: "700",
-    fontSize: 15,
-  },
-  releaseArtist: {
-    color: MC.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  releaseMeta: {
-    color: MC.textMuted,
-    fontSize: 11,
-    marginTop: 3,
-  },
-  likeButton: {
-    paddingLeft: 12,
-  },
-  likeIcon: {
-    fontSize: 22,
-    color: MC.textMuted,
-  },
-  likeIconActive: {
-    color: MC.accent,
-  },
+  releaseInfo: { flex: 1 },
+  releaseTitle: { color: MC.textPrimary, fontWeight: "700", fontSize: 15 },
+  releaseArtist: { color: MC.textSecondary, fontSize: 13, marginTop: 2 },
+  releaseMeta: { color: MC.textMuted, fontSize: 11, marginTop: 3 },
+  likeButton: { paddingLeft: 12 },
+  likeIcon: { fontSize: 22, color: MC.textMuted },
+  likeIconActive: { color: MC.accent },
 });
