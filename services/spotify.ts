@@ -53,6 +53,40 @@ export async function getTopTracks(token: string, limit = 10): Promise<SpotifyTr
 }
 
 export async function getNewReleases(token: string, limit = 10): Promise<SpotifyAlbum[]> {
-  const data = await get<{ albums: { items: SpotifyAlbum[] } }>(`/browse/new-releases?limit=${limit}`, token);
-  return data.albums.items;
+  const data = await get<{ items: { added_at: string; album: SpotifyAlbum }[] }>(`/me/albums?limit=${limit}`, token);
+  return data.items.map((i) => i.album);
+}
+
+export type SpotifySavedTrack = {
+  added_at: string;
+  track: SpotifyTrack & { duration_ms: number };
+};
+
+export type SpotifyPlaylist = {
+  id: string;
+  name: string;
+  description: string;
+  images: { url: string }[];
+  tracks: { total: number };
+  owner: { display_name: string };
+};
+
+export async function getSavedTracks(token: string, limit = 30): Promise<SpotifySavedTrack[]> {
+  const data = await get<{ items: SpotifySavedTrack[] }>(`/me/tracks?limit=${limit}`, token);
+  return data.items;
+}
+
+export async function getPlaylists(token: string, limit = 30): Promise<SpotifyPlaylist[]> {
+  const data = await get<{ items: SpotifyPlaylist[] }>(`/me/playlists?limit=${limit}`, token);
+  return data.items;
+}
+
+export type RecentlyPlayed = {
+  played_at: string;
+  track: SpotifyTrack & { duration_ms: number; album: { name: string; images: { url: string }[] } };
+};
+
+export async function getRecentlyPlayed(token: string, limit = 20): Promise<RecentlyPlayed[]> {
+  const data = await get<{ items: RecentlyPlayed[] }>(`/me/player/recently-played?limit=${limit}`, token);
+  return data.items;
 }

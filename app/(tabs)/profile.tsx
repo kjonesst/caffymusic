@@ -1,7 +1,20 @@
 import { MC } from "@/constants/theme";
-import { useRouter } from "expo-router";
-import React from "react";
+import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
+  getMe,
+  getTopArtists,
+  getRecentlyPlayed,
+  getSavedTracks,
+  getPlaylists,
+  SpotifyArtist,
+  RecentlyPlayed,
+  SpotifyUser,
+} from "@/services/spotify";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,94 +24,28 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const HISTORY = [
-  {
-    id: "1",
-    title: "Not Like Us",
-    artist: "Kendrick Lamar",
-    when: "2 hours ago",
-    color: "#7A1E2A",
-    initials: "KL",
-  },
-  {
-    id: "2",
-    title: "Snooze",
-    artist: "SZA",
-    when: "Yesterday",
-    color: "#5E3E82",
-    initials: "SZ",
-  },
-  {
-    id: "3",
-    title: "Starboy",
-    artist: "The Weeknd",
-    when: "Yesterday",
-    color: "#825E3E",
-    initials: "TW",
-  },
-  {
-    id: "4",
-    title: "Earfquake",
-    artist: "Tyler, The Creator",
-    when: "2 days ago",
-    color: "#3E825E",
-    initials: "TC",
-  },
-  {
-    id: "5",
-    title: "Ocean Eyes",
-    artist: "Billie Eilish",
-    when: "2 days ago",
-    color: "#823E5E",
-    initials: "BE",
-  },
-  {
-    id: "6",
-    title: "Blinding Lights",
-    artist: "The Weeknd",
-    when: "3 days ago",
-    color: "#825E3E",
-    initials: "TW",
-  },
-  {
-    id: "7",
-    title: "Pink + White",
-    artist: "Frank Ocean",
-    when: "4 days ago",
-    color: "#3E5E82",
-    initials: "FO",
-  },
+const AVATAR_COLORS = [
+  "#7A1E2A", "#5E3E82", "#3E5E82", "#3E825E",
+  "#823E5E", "#825E3E", "#3E8282", "#6E5E3E",
 ];
 
-const TOP_ARTISTS = [
-  {
-    id: "1",
-    name: "The Weeknd",
-    plays: "312 plays",
-    color: "#825E3E",
-    initials: "TW",
-  },
-  {
-    id: "2",
-    name: "Kendrick Lamar",
-    plays: "247 plays",
-    color: "#7A1E2A",
-    initials: "KL",
-  },
-  {
-    id: "3",
-    name: "SZA",
-    plays: "189 plays",
-    color: "#5E3E82",
-    initials: "SZ",
-  },
-];
+function colorForIndex(i: number) {
+  return AVATAR_COLORS[i % AVATAR_COLORS.length];
+}
 
-const STATS = [
-  { label: "Songs", value: "847" },
-  { label: "Artists", value: "43" },
-  { label: "Hours", value: "127" },
-];
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return days === 1 ? "Yesterday" : `${days} days ago`;
+  if (hours > 0) return `${hours}h ago`;
+  return `${minutes}m ago`;
+}
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -109,52 +56,90 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HistoryRow({ item }: { item: (typeof HISTORY)[0] }) {
+function TopArtistRow({ item, index }: { item: SpotifyArtist; index: number }) {
+  const imageUrl = item.images[0]?.url;
+  const color = colorForIndex(index);
+  const barWidth = `${100 - index * 20}%` as any;
+
   return (
-    <TouchableOpacity style={styles.historyRow} activeOpacity={0.75}>
-      <View style={[styles.historyArt, { backgroundColor: item.color }]}>
-        <Text style={styles.historyInitials}>{item.initials}</Text>
+    <TouchableOpacity style={styles.topArtistRow} activeOpacity={0.75}>
+      <Text style={styles.topArtistRank}>{index + 1}</Text>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.topArtistAvatar} />
+      ) : (
+        <View style={[styles.topArtistAvatar, { backgroundColor: color }]}>
+          <Text style={styles.topArtistInitials}>{initials(item.name)}</Text>
+        </View>
+      )}
+      <View style={styles.topArtistInfo}>
+        <Text style={styles.topArtistName}>{item.name}</Text>
+        <Text style={styles.topArtistGenre} numberOfLines={1}>{item.genres[0] ?? "Artist"}</Text>
       </View>
-      <View style={styles.historyInfo}>
-        <Text style={styles.historyTitle}>{item.title}</Text>
-        <Text style={styles.historyArtist}>{item.artist}</Text>
+      <View style={styles.topArtistBar}>
+        <View style={[styles.topArtistBarFill, { width: barWidth }]} />
       </View>
-      <Text style={styles.historyWhen}>{item.when}</Text>
     </TouchableOpacity>
   );
 }
 
-function TopArtistRow({
-  item,
-  rank,
-}: {
-  item: (typeof TOP_ARTISTS)[0];
-  rank: number;
-}) {
+function HistoryRow({ item }: { item: RecentlyPlayed }) {
+  const imageUrl = item.track.album.images[0]?.url;
+
   return (
-    <TouchableOpacity style={styles.topArtistRow} activeOpacity={0.75}>
-      <Text style={styles.topArtistRank}>{rank}</Text>
-      <View style={[styles.topArtistAvatar, { backgroundColor: item.color }]}>
-        <Text style={styles.topArtistInitials}>{item.initials}</Text>
+    <TouchableOpacity style={styles.historyRow} activeOpacity={0.75}>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.historyArt} />
+      ) : (
+        <View style={[styles.historyArt, { backgroundColor: colorForIndex(0) }]}>
+          <Text style={styles.historyInitials}>{initials(item.track.name)}</Text>
+        </View>
+      )}
+      <View style={styles.historyInfo}>
+        <Text style={styles.historyTitle} numberOfLines={1}>{item.track.name}</Text>
+        <Text style={styles.historyArtist} numberOfLines={1}>{item.track.artists[0]?.name}</Text>
       </View>
-      <View style={styles.topArtistInfo}>
-        <Text style={styles.topArtistName}>{item.name}</Text>
-        <Text style={styles.topArtistPlays}>{item.plays}</Text>
-      </View>
-      <View style={styles.topArtistBar}>
-        <View
-          style={[
-            styles.topArtistBarFill,
-            { width: `${100 - (rank - 1) * 25}%` as any },
-          ]}
-        />
-      </View>
+      <Text style={styles.historyWhen}>{timeAgo(item.played_at)}</Text>
     </TouchableOpacity>
   );
 }
 
 export default function ProfileScreen() {
+  const { token, logout } = useSpotifyAuth();
   const router = useRouter();
+  const [user, setUser] = useState<SpotifyUser | null>(null);
+  const [topArtists, setTopArtists] = useState<SpotifyArtist[]>([]);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<RecentlyPlayed[]>([]);
+  const [savedCount, setSavedCount] = useState(0);
+  const [playlistCount, setPlaylistCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      getMe(token),
+      getTopArtists(token, 3),
+      getRecentlyPlayed(token),
+      getSavedTracks(token, 50),
+      getPlaylists(token, 50),
+    ]).then(([me, artists, recent, saved, playlists]) => {
+      setUser(me);
+      setTopArtists(artists);
+      setRecentlyPlayed(recent);
+      setSavedCount(saved.length);
+      setPlaylistCount(playlists.length);
+    }).finally(() => setLoading(false));
+  }, [token]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={MC.accent} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  const profileImage = user?.images[0]?.url;
+  const displayName = user?.display_name ?? "";
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -167,57 +152,69 @@ export default function ProfileScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => router.push("/settings")}
-          >
-            <Text style={styles.settingsBtnText}>⚙</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.settingsBtn} onPress={logout}>
+              <Text style={styles.settingsBtnText}>↩</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={() => router.push("/settings")}
+            >
+              <Text style={styles.settingsBtnText}>⚙</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Avatar + Name */}
         <View style={styles.profileSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>KJ</Text>
+          <View style={styles.avatarContainer}>
+            {profileImage ? (
+              <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials(displayName)}</Text>
+              </View>
+            )}
           </View>
-          <Text style={styles.profileName}>Kenneth</Text>
-          <Text style={styles.profileHandle}>@kennethjonesstephen</Text>
+          <Text style={styles.profileName}>{displayName}</Text>
         </View>
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          {STATS.map((s) => (
-            <StatCard key={s.label} label={s.label} value={s.value} />
-          ))}
+          <StatCard label="Saved" value={String(savedCount)} />
+          <StatCard label="Playlists" value={String(playlistCount)} />
+          <StatCard label="Artists" value={String(topArtists.length > 0 ? "∞" : "0")} />
         </View>
 
         {/* Top Artists */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Artists This Month</Text>
-          <View style={styles.card}>
-            {TOP_ARTISTS.map((artist, index) => (
-              <React.Fragment key={artist.id}>
-                <TopArtistRow item={artist} rank={index + 1} />
-                {index < TOP_ARTISTS.length - 1 && (
-                  <View style={styles.divider} />
-                )}
-              </React.Fragment>
-            ))}
+        {topArtists.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Top Artists This Month</Text>
+            <View style={styles.card}>
+              {topArtists.map((artist, index) => (
+                <React.Fragment key={artist.id}>
+                  <TopArtistRow item={artist} index={index} />
+                  {index < topArtists.length - 1 && <View style={styles.divider} />}
+                </React.Fragment>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Listening History */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Listening History</Text>
-          <View style={styles.card}>
-            {HISTORY.map((item, index) => (
-              <React.Fragment key={item.id}>
-                <HistoryRow item={item} />
-                {index < HISTORY.length - 1 && <View style={styles.divider} />}
-              </React.Fragment>
-            ))}
+        {recentlyPlayed.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recently Played</Text>
+            <View style={styles.card}>
+              {recentlyPlayed.map((item, index) => (
+                <React.Fragment key={`${item.track.id}-${item.played_at}`}>
+                  <HistoryRow item={item} />
+                  {index < recentlyPlayed.length - 1 && <View style={styles.divider} />}
+                </React.Fragment>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -226,16 +223,10 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MC.bg,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 8,
-  },
+  container: { flex: 1, backgroundColor: MC.bg },
+  centered: { alignItems: "center", justifyContent: "center" },
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: 8 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -243,12 +234,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 24,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: MC.textPrimary,
-    letterSpacing: -0.5,
-  },
+  headerTitle: { fontSize: 28, fontWeight: "800", color: MC.textPrimary, letterSpacing: -0.5 },
   settingsBtn: {
     width: 36,
     height: 36,
@@ -259,62 +245,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  settingsBtnText: {
-    fontSize: 16,
-    color: MC.textSecondary,
-  },
-  profileSection: {
-    alignItems: "center",
-    paddingBottom: 28,
-  },
-  avatar: {
+  settingsBtnText: { fontSize: 16, color: MC.textSecondary },
+  headerActions: { flexDirection: "row", gap: 8 },
+  profileSection: { alignItems: "center", paddingBottom: 28 },
+  avatarContainer: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: MC.accent,
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: 14,
     borderWidth: 3,
     borderColor: MC.accentLight,
+    overflow: "hidden",
   },
-  avatarText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 30,
-    letterSpacing: -1,
+  avatarImage: { width: "100%", height: "100%" },
+  avatar: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: MC.accent,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  profileName: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: MC.textPrimary,
-    letterSpacing: -0.5,
-  },
-  profileHandle: {
-    fontSize: 13,
-    color: MC.textMuted,
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  memberBadge: {
-    backgroundColor: MC.surface,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: MC.border,
-  },
-  memberBadgeText: {
-    color: MC.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statsRow: {
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginBottom: 28,
-    gap: 12,
-  },
+  avatarText: { color: "#fff", fontWeight: "800", fontSize: 30, letterSpacing: -1 },
+  profileName: { fontSize: 24, fontWeight: "800", color: MC.textPrimary, letterSpacing: -0.5 },
+  statsRow: { flexDirection: "row", marginHorizontal: 20, marginBottom: 28, gap: 12 },
   statCard: {
     flex: 1,
     backgroundColor: MC.surface,
@@ -324,12 +277,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: MC.border,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: MC.textPrimary,
-    letterSpacing: -0.5,
-  },
+  statValue: { fontSize: 24, fontWeight: "800", color: MC.textPrimary, letterSpacing: -0.5 },
   statLabel: {
     fontSize: 11,
     color: MC.textMuted,
@@ -338,10 +286,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  section: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
+  section: { marginHorizontal: 20, marginBottom: 24 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
@@ -356,58 +301,9 @@ const styles = StyleSheet.create({
     borderColor: MC.border,
     overflow: "hidden",
   },
-  divider: {
-    height: 1,
-    backgroundColor: MC.border,
-    marginLeft: 66,
-  },
-  historyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-  },
-  historyArt: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  historyInitials: {
-    color: "rgba(255,255,255,0.85)",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-  historyInfo: {
-    flex: 1,
-  },
-  historyTitle: {
-    color: MC.textPrimary,
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  historyArtist: {
-    color: MC.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  historyWhen: {
-    color: MC.textMuted,
-    fontSize: 11,
-  },
-  topArtistRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-  },
-  topArtistRank: {
-    width: 22,
-    fontSize: 14,
-    fontWeight: "700",
-    color: MC.textMuted,
-    marginRight: 12,
-  },
+  divider: { height: 1, backgroundColor: MC.border, marginLeft: 66 },
+  topArtistRow: { flexDirection: "row", alignItems: "center", padding: 14 },
+  topArtistRank: { width: 22, fontSize: 14, fontWeight: "700", color: MC.textMuted, marginRight: 12 },
   topArtistAvatar: {
     width: 40,
     height: 40,
@@ -415,35 +311,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
-  },
-  topArtistInitials: {
-    color: "rgba(255,255,255,0.85)",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-  topArtistInfo: {
-    flex: 1,
-  },
-  topArtistName: {
-    color: MC.textPrimary,
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  topArtistPlays: {
-    color: MC.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  topArtistBar: {
-    width: 60,
-    height: 4,
-    backgroundColor: MC.border,
-    borderRadius: 2,
     overflow: "hidden",
   },
-  topArtistBarFill: {
-    height: "100%",
-    backgroundColor: MC.accent,
-    borderRadius: 2,
+  topArtistInitials: { color: "rgba(255,255,255,0.85)", fontWeight: "800", fontSize: 13 },
+  topArtistInfo: { flex: 1 },
+  topArtistName: { color: MC.textPrimary, fontWeight: "600", fontSize: 14 },
+  topArtistGenre: { color: MC.textMuted, fontSize: 11, marginTop: 2 },
+  topArtistBar: { width: 60, height: 4, backgroundColor: MC.border, borderRadius: 2, overflow: "hidden" },
+  topArtistBarFill: { height: "100%", backgroundColor: MC.accent, borderRadius: 2 },
+  historyRow: { flexDirection: "row", alignItems: "center", padding: 14 },
+  historyArt: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    overflow: "hidden",
   },
+  historyInitials: { color: "rgba(255,255,255,0.85)", fontWeight: "800", fontSize: 13 },
+  historyInfo: { flex: 1 },
+  historyTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 14 },
+  historyArtist: { color: MC.textSecondary, fontSize: 12, marginTop: 2 },
+  historyWhen: { color: MC.textMuted, fontSize: 11 },
 });

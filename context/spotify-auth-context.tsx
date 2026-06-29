@@ -1,15 +1,18 @@
 import * as AuthSession from 'expo-auth-session';
+import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_SPOTIFY_CLIENT_ID!;
+const TOKEN_KEY = 'spotify_access_token';
 const SCOPES = [
   'user-read-private',
   'user-read-email',
   'user-top-read',
   'user-library-read',
+  'user-read-recently-played',
   'playlist-read-private',
 ];
 
@@ -22,17 +25,25 @@ type SpotifyAuthContextType = {
   token: string | null;
   request: AuthSession.AuthRequest | null;
   promptAsync: () => void;
+  logout: () => void;
 };
 
 const SpotifyAuthContext = createContext<SpotifyAuthContextType>({
   token: null,
   request: null,
   promptAsync: () => {},
+  logout: () => {},
 });
 
 export function SpotifyAuthProvider({ children }: { children: React.ReactNode }) {
   const redirectUri = AuthSession.makeRedirectUri();
   const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    SecureStore.getItemAsync(TOKEN_KEY).then((stored) => {
+      if (stored) setToken(stored);
+    });
+  }, []);
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
@@ -66,12 +77,18 @@ export function SpotifyAuthProvider({ children }: { children: React.ReactNode })
 
     const data = await res.json();
     if (data.access_token) {
+      await SecureStore.setItemAsync(TOKEN_KEY, data.access_token);
       setToken(data.access_token);
     }
   }
 
+  async function logout() {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    setToken(null);
+  }
+
   return (
-    <SpotifyAuthContext.Provider value={{ token, request, promptAsync }}>
+    <SpotifyAuthContext.Provider value={{ token, request, promptAsync, logout }}>
       {children}
     </SpotifyAuthContext.Provider>
   );
