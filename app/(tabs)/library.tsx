@@ -1,10 +1,12 @@
 import { MC } from "@/constants/theme";
+import { useFavorites } from "@/context/favorites-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
   getSavedTracks,
   getPlaylists,
   SpotifySavedTrack,
   SpotifyPlaylist,
+  SpotifyTrack,
 } from "@/services/spotify";
 import React, { useEffect, useState } from "react";
 import {
@@ -19,7 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-type Tab = "favorites" | "downloads" | "playlists";
+type Tab = "favorites" | "mytracks" | "playlists";
 
 const AVATAR_COLORS = [
   "#7A1E2A", "#5E3E82", "#3E5E82", "#3E825E",
@@ -41,7 +43,7 @@ function formatDuration(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function SongRow({ item, index }: { item: SpotifySavedTrack; index: number }) {
+function SpotifySongRow({ item, index }: { item: SpotifySavedTrack; index: number }) {
   const [liked, setLiked] = useState(true);
   const imageUrl = item.track.album.images[0]?.url;
   const color = colorForIndex(index);
@@ -68,6 +70,35 @@ function SongRow({ item, index }: { item: SpotifySavedTrack; index: number }) {
         <Text style={[styles.actionIcon, liked && styles.actionIconActive]}>
           {liked ? "♥" : "♡"}
         </Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+function MyTrackRow({ item, index }: { item: SpotifyTrack; index: number }) {
+  const { toggleFavorite } = useFavorites();
+  const imageUrl = item.album.images[0]?.url;
+  const color = colorForIndex(index);
+
+  return (
+    <TouchableOpacity style={styles.songRow} activeOpacity={0.75}>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.songArt} />
+      ) : (
+        <View style={[styles.songArt, { backgroundColor: color }]}>
+          <Text style={styles.songInitials}>{initials(item.name)}</Text>
+        </View>
+      )}
+      <View style={styles.songInfo}>
+        <Text style={styles.songTitle} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.songArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
+      </View>
+      <TouchableOpacity
+        style={styles.actionBtn}
+        onPress={() => toggleFavorite(item)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Text style={[styles.actionIcon, styles.actionIconActive]}>♥</Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -105,6 +136,7 @@ function EmptyState({ message }: { message: string }) {
 
 export default function LibraryScreen() {
   const { token } = useSpotifyAuth();
+  const { favorites } = useFavorites();
   const [activeTab, setActiveTab] = useState<Tab>("favorites");
   const [savedTracks, setSavedTracks] = useState<SpotifySavedTrack[]>([]);
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
@@ -121,14 +153,14 @@ export default function LibraryScreen() {
   }, [token]);
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "favorites", label: "Favorites" },
-    { key: "downloads", label: "Downloads" },
+    { key: "favorites", label: "Favourites" },
+    { key: "mytracks", label: "My Tracks" },
     { key: "playlists", label: "Playlists" },
   ];
 
-  const counts = {
+  const counts: Record<Tab, number> = {
     favorites: savedTracks.length,
-    downloads: 0,
+    mytracks: favorites.length,
     playlists: playlists.length,
   };
 
@@ -147,7 +179,7 @@ export default function LibraryScreen() {
         <FlatList
           data={savedTracks}
           keyExtractor={(item) => item.track.id}
-          renderItem={({ item, index }) => <SongRow item={item} index={index} />}
+          renderItem={({ item, index }) => <SpotifySongRow item={item} index={index} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -155,8 +187,18 @@ export default function LibraryScreen() {
       );
     }
 
-    if (activeTab === "downloads") {
-      return <EmptyState message="Downloaded songs appear here" />;
+    if (activeTab === "mytracks") {
+      if (!favorites.length) return <EmptyState message="Heart a song to save it here" />;
+      return (
+        <FlatList
+          data={favorites}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => <MyTrackRow item={item} index={index} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+      );
     }
 
     if (!playlists.length) return <EmptyState message="No playlists yet" />;
@@ -176,7 +218,6 @@ export default function LibraryScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor={MC.bg} />
 
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your Library</Text>
         <TouchableOpacity style={styles.addBtn}>
@@ -184,7 +225,6 @@ export default function LibraryScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabRow}>
         {tabs.map((tab) => (
           <TouchableOpacity
@@ -200,14 +240,12 @@ export default function LibraryScreen() {
         ))}
       </View>
 
-      {/* Count */}
       {!loading && (
         <Text style={styles.countText}>
           {counts[activeTab]} {activeTab === "playlists" ? "playlists" : "songs"}
         </Text>
       )}
 
-      {/* Content */}
       {renderContent()}
     </SafeAreaView>
   );

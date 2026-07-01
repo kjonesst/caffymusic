@@ -12,6 +12,7 @@ import {
   SpotifyTrack,
   SearchResults,
 } from "@/services/spotify";
+import { useFavorites } from "@/context/favorites-context";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -87,6 +88,8 @@ function TrendingCard({ item, index, onPress }: { item: SpotifyTrack; index: num
   const imageUrl = item.album.images[0]?.url;
   const color = colorForIndex(index);
   const rank = String(index + 1).padStart(2, "0");
+  const { isFavorited, toggleFavorite } = useFavorites();
+  const favorited = isFavorited(item.id);
   return (
     <TouchableOpacity style={styles.trendingCard} activeOpacity={0.75} onPress={onPress}>
       <View style={[styles.trendingTop, { backgroundColor: color }]}>
@@ -98,7 +101,17 @@ function TrendingCard({ item, index, onPress }: { item: SpotifyTrack; index: num
       <View style={styles.trendingBottom}>
         <Text style={styles.trendingTitle} numberOfLines={2}>{item.name}</Text>
         <Text style={styles.trendingArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
-        <Text style={styles.trendingPlays}>{item.popularity}% popularity</Text>
+        <View style={styles.trendingFooter}>
+          <Text style={styles.trendingPlays}>{item.popularity}% popularity</Text>
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation(); toggleFavorite(item); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.trendingHeart, favorited && styles.trendingHeartActive]}>
+              {favorited ? "♥" : "♡"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -132,6 +145,35 @@ function ReleaseRow({ item, index }: { item: SpotifyAlbum; index: number }) {
       >
         <Text style={[styles.likeIcon, liked && styles.likeIconActive]}>
           {liked ? "♥" : "♡"}
+        </Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+function SearchTrackRow({ track, index, onPress }: { track: SpotifyTrack; index: number; onPress: () => void }) {
+  const { isFavorited, toggleFavorite } = useFavorites();
+  const favorited = isFavorited(track.id);
+  return (
+    <TouchableOpacity style={styles.searchRow} activeOpacity={0.75} onPress={onPress}>
+      {track.album.images[0]?.url ? (
+        <Image source={{ uri: track.album.images[0].url }} style={styles.searchAvatarSquare} />
+      ) : (
+        <View style={[styles.searchAvatarSquare, { backgroundColor: colorForIndex(index) }]}>
+          <Text style={styles.searchInitials}>{initials(track.name)}</Text>
+        </View>
+      )}
+      <View style={styles.searchInfo}>
+        <Text style={styles.searchTitle}>{track.name}</Text>
+        <Text style={styles.searchSub}>{track.artists[0]?.name}</Text>
+      </View>
+      <TouchableOpacity
+        onPress={(e) => { e.stopPropagation(); toggleFavorite(track); }}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ paddingLeft: 8 }}
+      >
+        <Text style={[styles.trendingHeart, favorited && styles.trendingHeartActive]}>
+          {favorited ? "♥" : "♡"}
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>
@@ -273,24 +315,7 @@ export default function HomeScreen() {
                     <>
                       <Text style={styles.searchSection}>Songs</Text>
                       {searchResults.tracks.map((t, i) => (
-                        <TouchableOpacity
-                          key={t.id}
-                          style={styles.searchRow}
-                          activeOpacity={0.75}
-                          onPress={() => setCurrentTrack(t)}
-                        >
-                          {t.album.images[0]?.url ? (
-                            <Image source={{ uri: t.album.images[0].url }} style={styles.searchAvatarSquare} />
-                          ) : (
-                            <View style={[styles.searchAvatarSquare, { backgroundColor: colorForIndex(i) }]}>
-                              <Text style={styles.searchInitials}>{initials(t.name)}</Text>
-                            </View>
-                          )}
-                          <View style={styles.searchInfo}>
-                            <Text style={styles.searchTitle}>{t.name}</Text>
-                            <Text style={styles.searchSub}>{t.artists[0]?.name}</Text>
-                          </View>
-                        </TouchableOpacity>
+                        <SearchTrackRow key={t.id} track={t} index={i} onPress={() => setCurrentTrack(t)} />
                       ))}
                     </>
                   )}
@@ -609,7 +634,10 @@ const styles = StyleSheet.create({
   trendingBottom: { padding: 12, gap: 2 },
   trendingTitle: { color: MC.textPrimary, fontWeight: "700", fontSize: 13, lineHeight: 17 },
   trendingArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
-  trendingPlays: { color: MC.textMuted, fontSize: 10, marginTop: 4 },
+  trendingPlays: { color: MC.textMuted, fontSize: 10 },
+  trendingFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
+  trendingHeart: { fontSize: 16, color: MC.textMuted },
+  trendingHeartActive: { color: MC.accent },
   releaseList: { paddingHorizontal: 20, gap: 4 },
   releaseRow: {
     flexDirection: "row",
