@@ -1,3 +1,4 @@
+import MiniPlayer from "@/components/MiniPlayer";
 import { MC } from "@/constants/theme";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
@@ -82,12 +83,12 @@ function ArtistCard({ item, index }: { item: SpotifyArtist; index: number }) {
   );
 }
 
-function TrendingCard({ item, index }: { item: SpotifyTrack; index: number }) {
+function TrendingCard({ item, index, onPress }: { item: SpotifyTrack; index: number; onPress: () => void }) {
   const imageUrl = item.album.images[0]?.url;
   const color = colorForIndex(index);
   const rank = String(index + 1).padStart(2, "0");
   return (
-    <TouchableOpacity style={styles.trendingCard} activeOpacity={0.75}>
+    <TouchableOpacity style={styles.trendingCard} activeOpacity={0.75} onPress={onPress}>
       <View style={[styles.trendingTop, { backgroundColor: color }]}>
         {imageUrl && (
           <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFillObject} />
@@ -148,6 +149,7 @@ export default function HomeScreen() {
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
   const [releases, setReleases] = useState<SpotifyAlbum[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentTrack, setCurrentTrack] = useState<SpotifyTrack | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -271,7 +273,12 @@ export default function HomeScreen() {
                     <>
                       <Text style={styles.searchSection}>Songs</Text>
                       {searchResults.tracks.map((t, i) => (
-                        <TouchableOpacity key={t.id} style={styles.searchRow} activeOpacity={0.75}>
+                        <TouchableOpacity
+                          key={t.id}
+                          style={styles.searchRow}
+                          activeOpacity={0.75}
+                          onPress={() => t.preview_url ? setCurrentTrack(t) : null}
+                        >
                           {t.album.images[0]?.url ? (
                             <Image source={{ uri: t.album.images[0].url }} style={styles.searchAvatarSquare} />
                           ) : (
@@ -372,7 +379,13 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               data={tracks}
               keyExtractor={(item) => item.id}
-              renderItem={({ item, index }) => <TrendingCard item={item} index={index} />}
+              renderItem={({ item, index }) => (
+                <TrendingCard
+                  item={item}
+                  index={index}
+                  onPress={() => item.preview_url ? setCurrentTrack(item) : null}
+                />
+              )}
               contentContainerStyle={styles.horizontalList}
             />
           </>
@@ -396,8 +409,11 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: currentTrack ? 80 : 24 }} />
       </ScrollView>
+      {currentTrack && (
+        <MiniPlayer track={currentTrack} onClose={() => setCurrentTrack(null)} />
+      )}
     </SafeAreaView>
   );
 }

@@ -21,6 +21,7 @@ export type SpotifyTrack = {
   artists: { name: string }[];
   album: { name: string; images: { url: string }[] };
   popularity: number;
+  preview_url: string | null;
 };
 
 export type SpotifyAlbum = {
