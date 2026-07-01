@@ -277,7 +277,7 @@ export default function HomeScreen() {
                           key={t.id}
                           style={styles.searchRow}
                           activeOpacity={0.75}
-                          onPress={() => t.preview_url ? setCurrentTrack(t) : null}
+                          onPress={() => setCurrentTrack(t)}
                         >
                           {t.album.images[0]?.url ? (
                             <Image source={{ uri: t.album.images[0].url }} style={styles.searchAvatarSquare} />
@@ -383,7 +383,7 @@ export default function HomeScreen() {
                 <TrendingCard
                   item={item}
                   index={index}
-                  onPress={() => item.preview_url ? setCurrentTrack(item) : null}
+                  onPress={() => setCurrentTrack(item)}
                 />
               )}
               contentContainerStyle={styles.horizontalList}
@@ -409,10 +409,10 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={{ height: currentTrack ? 80 : 24 }} />
+        <View style={{ height: currentTrack ? 184 : 24 }} />
       </ScrollView>
       {currentTrack && (
-        <MiniPlayer track={currentTrack} onClose={() => setCurrentTrack(null)} />
+        <MiniPlayer key={currentTrack.id} track={currentTrack} onClose={() => setCurrentTrack(null)} />
       )}
     </SafeAreaView>
   );
