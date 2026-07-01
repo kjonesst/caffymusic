@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SpotifyAuthProvider, useSpotifyAuth } from '@/context/spotify-auth-context';
+import { LocalTracksProvider } from '@/context/local-tracks-context';
 import { FavoritesProvider } from '@/context/favorites-context';
 
 function AuthGate() {
@@ -36,6 +37,7 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <SpotifyAuthProvider>
       <FavoritesProvider>
+      <LocalTracksProvider>
         <Stack>
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -43,6 +45,7 @@ export default function RootLayout() {
         </Stack>
         <AuthGate />
         <StatusBar style="auto" />
+      </LocalTracksProvider>
       </FavoritesProvider>
       </SpotifyAuthProvider>
     </ThemeProvider>

@@ -1,6 +1,7 @@
 import MiniPlayer from "@/components/MiniPlayer";
 import { MC } from "@/constants/theme";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
+import { useFavorites } from "@/context/favorites-context";
 import {
   getMe,
   getNewReleases,
@@ -12,7 +13,6 @@ import {
   SpotifyTrack,
   SearchResults,
 } from "@/services/spotify";
-import { useFavorites } from "@/context/favorites-context";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -88,8 +88,6 @@ function TrendingCard({ item, index, onPress }: { item: SpotifyTrack; index: num
   const imageUrl = item.album.images[0]?.url;
   const color = colorForIndex(index);
   const rank = String(index + 1).padStart(2, "0");
-  const { isFavorited, toggleFavorite } = useFavorites();
-  const favorited = isFavorited(item.id);
   return (
     <TouchableOpacity style={styles.trendingCard} activeOpacity={0.75} onPress={onPress}>
       <View style={[styles.trendingTop, { backgroundColor: color }]}>
@@ -101,18 +99,26 @@ function TrendingCard({ item, index, onPress }: { item: SpotifyTrack; index: num
       <View style={styles.trendingBottom}>
         <Text style={styles.trendingTitle} numberOfLines={2}>{item.name}</Text>
         <Text style={styles.trendingArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
-        <View style={styles.trendingFooter}>
-          <Text style={styles.trendingPlays}>{item.popularity}% popularity</Text>
-          <TouchableOpacity
-            onPress={(e) => { e.stopPropagation(); toggleFavorite(item); }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.trendingHeart, favorited && styles.trendingHeartActive]}>
-              {favorited ? "♥" : "♡"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.trendingPlays}>{item.popularity}% popularity</Text>
       </View>
+    </TouchableOpacity>
+  );
+}
+
+function FavouriteTrackCard({ item, index, onPress }: { item: SpotifyTrack; index: number; onPress: () => void }) {
+  const imageUrl = item.album.images[0]?.url;
+  const color = colorForIndex(index);
+  return (
+    <TouchableOpacity style={styles.favCard} activeOpacity={0.75} onPress={onPress}>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.favArt} />
+      ) : (
+        <View style={[styles.favArt, { backgroundColor: color }]}>
+          <Text style={styles.favInitials}>{initials(item.name)}</Text>
+        </View>
+      )}
+      <Text style={styles.favTitle} numberOfLines={1}>{item.name}</Text>
+      <Text style={styles.favArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
     </TouchableOpacity>
   );
 }
@@ -153,7 +159,7 @@ function ReleaseRow({ item, index }: { item: SpotifyAlbum; index: number }) {
 
 function SearchTrackRow({ track, index, onPress }: { track: SpotifyTrack; index: number; onPress: () => void }) {
   const { isFavorited, toggleFavorite } = useFavorites();
-  const favorited = isFavorited(track.id);
+  const fav = isFavorited(track.id);
   return (
     <TouchableOpacity style={styles.searchRow} activeOpacity={0.75} onPress={onPress}>
       {track.album.images[0]?.url ? (
@@ -168,12 +174,11 @@ function SearchTrackRow({ track, index, onPress }: { track: SpotifyTrack; index:
         <Text style={styles.searchSub}>{track.artists[0]?.name}</Text>
       </View>
       <TouchableOpacity
-        onPress={(e) => { e.stopPropagation(); toggleFavorite(track); }}
+        onPress={() => toggleFavorite(track)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        style={{ paddingLeft: 8 }}
       >
-        <Text style={[styles.trendingHeart, favorited && styles.trendingHeartActive]}>
-          {favorited ? "♥" : "♡"}
+        <Text style={[styles.searchFavIcon, fav && styles.searchFavIconActive]}>
+          {fav ? "♥" : "♡"}
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>
@@ -182,6 +187,7 @@ function SearchTrackRow({ track, index, onPress }: { track: SpotifyTrack; index:
 
 export default function HomeScreen() {
   const { token } = useSpotifyAuth();
+  const { favorites } = useFavorites();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
   const [searching, setSearching] = useState(false);
@@ -416,6 +422,27 @@ export default function HomeScreen() {
           </>
         )}
 
+        {/* Favourites */}
+        {favorites.length > 0 && (
+          <>
+            <SectionHeader title="Favourites" />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={favorites}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item, index }) => (
+                <FavouriteTrackCard
+                  item={item}
+                  index={index}
+                  onPress={() => setCurrentTrack(item)}
+                />
+              )}
+              contentContainerStyle={styles.horizontalList}
+            />
+          </>
+        )}
+
         {/* New Releases */}
         {releases.length > 0 && (
           <>
@@ -428,7 +455,7 @@ export default function HomeScreen() {
           </>
         )}
 
-        {artists.length === 0 && tracks.length === 0 && releases.length === 0 && (
+        {artists.length === 0 && tracks.length === 0 && releases.length === 0 && favorites.length === 0 && (
           <View style={styles.emptyHome}>
             <Text style={styles.emptyHomeText}>Play some music on Spotify to see your personalised content here.</Text>
           </View>
@@ -544,6 +571,8 @@ const styles = StyleSheet.create({
   searchInfo: { flex: 1 },
   searchTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 14 },
   searchSub: { color: MC.textSecondary, fontSize: 12, marginTop: 2 },
+  searchFavIcon: { fontSize: 20, color: MC.textMuted, paddingLeft: 8 },
+  searchFavIconActive: { color: MC.accent },
   featuredCard: {
     marginHorizontal: 20,
     marginBottom: 28,
@@ -634,10 +663,7 @@ const styles = StyleSheet.create({
   trendingBottom: { padding: 12, gap: 2 },
   trendingTitle: { color: MC.textPrimary, fontWeight: "700", fontSize: 13, lineHeight: 17 },
   trendingArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
-  trendingPlays: { color: MC.textMuted, fontSize: 10 },
-  trendingFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
-  trendingHeart: { fontSize: 16, color: MC.textMuted },
-  trendingHeartActive: { color: MC.accent },
+  trendingPlays: { color: MC.textMuted, fontSize: 10, marginTop: 4 },
   releaseList: { paddingHorizontal: 20, gap: 4 },
   releaseRow: {
     flexDirection: "row",
@@ -667,6 +693,19 @@ const styles = StyleSheet.create({
   likeButton: { paddingLeft: 12 },
   likeIcon: { fontSize: 22, color: MC.textMuted },
   likeIconActive: { color: MC.accent },
+  favCard: { width: 120, marginBottom: 4 },
+  favArt: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    marginBottom: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  favInitials: { color: "#fff", fontWeight: "800", fontSize: 20 },
+  favTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 13, lineHeight: 17 },
+  favArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
   emptyHome: { paddingHorizontal: 20, paddingTop: 20, alignItems: "center" },
   emptyHomeText: { color: MC.textMuted, fontSize: 14, textAlign: "center", lineHeight: 22 },
 });

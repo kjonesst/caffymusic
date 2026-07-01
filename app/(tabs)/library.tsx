@@ -1,14 +1,16 @@
 import { MC } from "@/constants/theme";
 import { useFavorites } from "@/context/favorites-context";
+import { useLocalTracks, LocalTrack } from "@/context/local-tracks-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
-  getSavedTracks,
   getPlaylists,
-  SpotifySavedTrack,
-  SpotifyPlaylist,
   SpotifyTrack,
+  SpotifyPlaylist,
 } from "@/services/spotify";
-import React, { useEffect, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import { Directory, File, Paths } from "expo-file-system";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -43,43 +45,11 @@ function formatDuration(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function SpotifySongRow({ item, index }: { item: SpotifySavedTrack; index: number }) {
-  const [liked, setLiked] = useState(true);
-  const imageUrl = item.track.album.images[0]?.url;
-  const color = colorForIndex(index);
-
-  return (
-    <TouchableOpacity style={styles.songRow} activeOpacity={0.75}>
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.songArt} />
-      ) : (
-        <View style={[styles.songArt, { backgroundColor: color }]}>
-          <Text style={styles.songInitials}>{initials(item.track.name)}</Text>
-        </View>
-      )}
-      <View style={styles.songInfo}>
-        <Text style={styles.songTitle} numberOfLines={1}>{item.track.name}</Text>
-        <Text style={styles.songArtist} numberOfLines={1}>{item.track.artists[0]?.name}</Text>
-      </View>
-      <Text style={styles.songDuration}>{formatDuration(item.track.duration_ms)}</Text>
-      <TouchableOpacity
-        style={styles.actionBtn}
-        onPress={() => setLiked(!liked)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Text style={[styles.actionIcon, liked && styles.actionIconActive]}>
-          {liked ? "♥" : "♡"}
-        </Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-}
-
-function MyTrackRow({ item, index }: { item: SpotifyTrack; index: number }) {
-  const { toggleFavorite } = useFavorites();
+function SpotifySongRow({ item, index }: { item: SpotifyTrack; index: number }) {
+  const { isFavorited, toggleFavorite } = useFavorites();
+  const fav = isFavorited(item.id);
   const imageUrl = item.album.images[0]?.url;
   const color = colorForIndex(index);
-
   return (
     <TouchableOpacity style={styles.songRow} activeOpacity={0.75}>
       {imageUrl ? (
@@ -98,16 +68,91 @@ function MyTrackRow({ item, index }: { item: SpotifyTrack; index: number }) {
         onPress={() => toggleFavorite(item)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Text style={[styles.actionIcon, styles.actionIconActive]}>♥</Text>
+        <Text style={[styles.actionIcon, fav && styles.actionIconActive]}>
+          {fav ? "♥" : "♡"}
+        </Text>
       </TouchableOpacity>
     </TouchableOpacity>
+  );
+}
+
+function LocalTrackRow({
+  item,
+  isPlaying,
+  onPress,
+  onRemove,
+}: {
+  item: LocalTrack;
+  isPlaying: boolean;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
+  const label = item.name.replace(/\.[^/.]+$/, ""); // strip extension
+  return (
+    <TouchableOpacity style={styles.songRow} activeOpacity={0.75} onPress={onPress}>
+      <View style={[styles.songArt, styles.localArt]}>
+        <Text style={styles.localArtIcon}>{isPlaying ? "▶" : "♪"}</Text>
+      </View>
+      <View style={styles.songInfo}>
+        <Text style={[styles.songTitle, isPlaying && styles.songTitleActive]} numberOfLines={1}>
+          {label}
+        </Text>
+        <Text style={styles.songArtist} numberOfLines={1}>Local file</Text>
+      </View>
+      <TouchableOpacity
+        style={styles.actionBtn}
+        onPress={onRemove}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Text style={styles.removeIcon}>✕</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+function LocalPlayer({ uri }: { uri: string }) {
+  const player = useAudioPlayer(uri);
+  const status = useAudioPlayerStatus(player);
+  const hasStarted = useRef(false);
+
+  useEffect(() => {
+    if (!hasStarted.current && status.isLoaded) {
+      hasStarted.current = true;
+      player.play();
+    }
+  }, [status.isLoaded]);
+
+  const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
+
+  return (
+    <View style={styles.localPlayer}>
+      <View style={styles.localPlayerProgress}>
+        <View style={[styles.localPlayerFill, { width: `${progress * 100}%` }]} />
+      </View>
+      <View style={styles.localPlayerControls}>
+        <TouchableOpacity
+          onPress={() => status.playing ? player.pause() : player.play()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.localPlayerBtn}>{status.playing ? "⏸" : "▶"}</Text>
+        </TouchableOpacity>
+        <Text style={styles.localPlayerTime}>
+          {formatDuration(status.currentTime * 1000)} / {formatDuration(status.duration * 1000)}
+        </Text>
+        <TouchableOpacity
+          onPress={() => player.seekTo(0)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.localPlayerBtn}>↺</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 function PlaylistRow({ item, index }: { item: SpotifyPlaylist; index: number }) {
   const imageUrl = item.images[0]?.url;
   const color = colorForIndex(index);
-
   return (
     <TouchableOpacity style={styles.songRow} activeOpacity={0.75}>
       {imageUrl ? (
@@ -137,20 +182,48 @@ function EmptyState({ message }: { message: string }) {
 export default function LibraryScreen() {
   const { token } = useSpotifyAuth();
   const { favorites } = useFavorites();
+  const { tracks: localTracks, addTrack, removeTrack } = useLocalTracks();
   const [activeTab, setActiveTab] = useState<Tab>("favorites");
-  const [savedTracks, setSavedTracks] = useState<SpotifySavedTrack[]>([]);
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [playingUri, setPlayingUri] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
-    Promise.all([getSavedTracks(token), getPlaylists(token)])
-      .then(([tracks, lists]) => {
-        setSavedTracks(tracks);
-        setPlaylists(lists);
-      })
+    getPlaylists(token)
+      .then(setPlaylists)
       .finally(() => setLoading(false));
   }, [token]);
+
+  async function pickAudioFile() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "audio/*",
+      copyToCacheDirectory: true,
+      multiple: true,
+    });
+    if (result.canceled) return;
+
+    // Ensure persistent storage directory exists
+    const tracksDir = new Directory(Paths.document, "mytracks");
+    if (!tracksDir.exists) tracksDir.create();
+
+    for (const asset of result.assets) {
+      // Derive a unique filename to avoid collisions
+      const safeName = `${Date.now()}_${asset.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const dest = new File(tracksDir, safeName);
+
+      // Copy from cache → document directory (survives OS cache clears)
+      new File(asset.uri).copy(dest);
+
+      addTrack({
+        uri: dest.uri,
+        name: asset.name,
+        size: asset.size,
+        addedAt: Date.now(),
+      });
+    }
+    setActiveTab("mytracks");
+  }
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "favorites", label: "Favourites" },
@@ -159,13 +232,13 @@ export default function LibraryScreen() {
   ];
 
   const counts: Record<Tab, number> = {
-    favorites: savedTracks.length,
-    mytracks: favorites.length,
+    favorites: favorites.length,
+    mytracks: localTracks.length,
     playlists: playlists.length,
   };
 
   const renderContent = () => {
-    if (loading) {
+    if (loading && activeTab !== "mytracks") {
       return (
         <View style={styles.centered}>
           <ActivityIndicator color={MC.accent} size="large" />
@@ -174,11 +247,11 @@ export default function LibraryScreen() {
     }
 
     if (activeTab === "favorites") {
-      if (!savedTracks.length) return <EmptyState message="No saved songs yet" />;
+      if (!favorites.length) return <EmptyState message="Search for songs and tap ♡ to favourite them" />;
       return (
         <FlatList
-          data={savedTracks}
-          keyExtractor={(item) => item.track.id}
+          data={favorites}
+          keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => <SpotifySongRow item={item} index={index} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -188,16 +261,38 @@ export default function LibraryScreen() {
     }
 
     if (activeTab === "mytracks") {
-      if (!favorites.length) return <EmptyState message="Heart a song to save it here" />;
+      if (!localTracks.length) {
+        return (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No local tracks yet</Text>
+            <Text style={styles.emptyHint}>Tap + to add music from your phone</Text>
+          </View>
+        );
+      }
       return (
-        <FlatList
-          data={favorites}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => <MyTrackRow item={item} index={index} />}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
+        <>
+          {playingUri && (
+            <LocalPlayer key={playingUri} uri={playingUri} />
+          )}
+          <FlatList
+            data={localTracks}
+            keyExtractor={(item) => item.uri}
+            renderItem={({ item }) => (
+              <LocalTrackRow
+                item={item}
+                isPlaying={playingUri === item.uri}
+                onPress={() => setPlayingUri(item.uri === playingUri ? null : item.uri)}
+                onRemove={() => {
+                  if (playingUri === item.uri) setPlayingUri(null);
+                  removeTrack(item.uri);
+                }}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+        </>
       );
     }
 
@@ -220,7 +315,7 @@ export default function LibraryScreen() {
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your Library</Text>
-        <TouchableOpacity style={styles.addBtn}>
+        <TouchableOpacity style={styles.addBtn} onPress={pickAudioFile}>
           <Text style={styles.addBtnText}>+</Text>
         </TouchableOpacity>
       </View>
@@ -314,15 +409,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
+  localArt: { backgroundColor: MC.surface, borderWidth: 1, borderColor: MC.border },
+  localArtIcon: { fontSize: 20, color: MC.accent },
   songInitials: { color: "rgba(255,255,255,0.85)", fontWeight: "800", fontSize: 15 },
   songInfo: { flex: 1 },
   songTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 15 },
+  songTitleActive: { color: MC.accent },
   songArtist: { color: MC.textSecondary, fontSize: 13, marginTop: 3 },
   songDuration: { color: MC.textMuted, fontSize: 12, marginRight: 14 },
   actionBtn: { paddingLeft: 4 },
   actionIcon: { fontSize: 20, color: MC.textMuted },
   actionIconActive: { color: MC.accent },
+  removeIcon: { fontSize: 14, color: MC.textMuted },
   chevron: { color: MC.textMuted, fontSize: 24, fontWeight: "300" },
-  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 8 },
   emptyText: { color: MC.textMuted, fontSize: 15 },
+  emptyHint: { color: MC.textMuted, fontSize: 13, opacity: 0.6 },
+  localPlayer: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: MC.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: MC.border,
+    overflow: "hidden",
+  },
+  localPlayerProgress: { height: 3, backgroundColor: MC.border },
+  localPlayerFill: { height: 3, backgroundColor: MC.accent },
+  localPlayerControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  localPlayerBtn: { fontSize: 22, color: MC.accent },
+  localPlayerTime: { color: MC.textSecondary, fontSize: 13 },
 });
