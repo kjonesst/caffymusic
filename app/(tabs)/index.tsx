@@ -5,9 +5,11 @@ import {
   getNewReleases,
   getTopArtists,
   getTopTracks,
+  search,
   SpotifyAlbum,
   SpotifyArtist,
   SpotifyTrack,
+  SearchResults,
 } from "@/services/spotify";
 import React, { useEffect, useState } from "react";
 import {
@@ -137,7 +139,9 @@ function ReleaseRow({ item, index }: { item: SpotifyAlbum; index: number }) {
 
 export default function HomeScreen() {
   const { token } = useSpotifyAuth();
-  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searching, setSearching] = useState(false);
   const [userName, setUserName] = useState("");
   const [userImage, setUserImage] = useState<string | null>(null);
   const [artists, setArtists] = useState<SpotifyArtist[]>([]);
@@ -158,8 +162,26 @@ export default function HomeScreen() {
       setArtists(topArtists);
       setTracks(topTracks);
       setReleases(newReleases);
-    }).finally(() => setLoading(false));
+    }).catch((e) => console.log('Home fetch error:', e.message))
+    .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await search(token, searchQuery.trim());
+        setSearchResults(results);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [searchQuery, token]);
 
   const featured = artists[0];
 
@@ -201,16 +223,94 @@ export default function HomeScreen() {
         </View>
 
         {/* Search Bar */}
-        <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>⌕</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search artists, songs, albums..."
-            placeholderTextColor={MC.textMuted}
-            value={search}
-            onChangeText={setSearch}
-            selectionColor={MC.accent}
-          />
+        <View style={styles.searchWrapper}>
+          <View style={styles.searchBar}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search artists, songs, albums..."
+              placeholderTextColor={MC.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              selectionColor={MC.accent}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Text style={styles.searchClear}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Search Results */}
+          {(searchResults || searching) && (
+            <View style={styles.searchResults}>
+              {searching && <ActivityIndicator color={MC.accent} style={{ padding: 16 }} />}
+              {searchResults && !searching && (
+                <>
+                  {searchResults.artists.length > 0 && (
+                    <>
+                      <Text style={styles.searchSection}>Artists</Text>
+                      {searchResults.artists.map((a, i) => (
+                        <TouchableOpacity key={a.id} style={styles.searchRow} activeOpacity={0.75}>
+                          {a.images[0]?.url ? (
+                            <Image source={{ uri: a.images[0].url }} style={styles.searchAvatarRound} />
+                          ) : (
+                            <View style={[styles.searchAvatarRound, { backgroundColor: colorForIndex(i) }]}>
+                              <Text style={styles.searchInitials}>{initials(a.name)}</Text>
+                            </View>
+                          )}
+                          <View style={styles.searchInfo}>
+                            <Text style={styles.searchTitle}>{a.name}</Text>
+                            <Text style={styles.searchSub}>{a.genres?.[0] ?? "Artist"}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                  {searchResults.tracks.length > 0 && (
+                    <>
+                      <Text style={styles.searchSection}>Songs</Text>
+                      {searchResults.tracks.map((t, i) => (
+                        <TouchableOpacity key={t.id} style={styles.searchRow} activeOpacity={0.75}>
+                          {t.album.images[0]?.url ? (
+                            <Image source={{ uri: t.album.images[0].url }} style={styles.searchAvatarSquare} />
+                          ) : (
+                            <View style={[styles.searchAvatarSquare, { backgroundColor: colorForIndex(i) }]}>
+                              <Text style={styles.searchInitials}>{initials(t.name)}</Text>
+                            </View>
+                          )}
+                          <View style={styles.searchInfo}>
+                            <Text style={styles.searchTitle}>{t.name}</Text>
+                            <Text style={styles.searchSub}>{t.artists[0]?.name}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                  {searchResults.albums.length > 0 && (
+                    <>
+                      <Text style={styles.searchSection}>Albums</Text>
+                      {searchResults.albums.map((a, i) => (
+                        <TouchableOpacity key={a.id} style={styles.searchRow} activeOpacity={0.75}>
+                          {a.images[0]?.url ? (
+                            <Image source={{ uri: a.images[0].url }} style={styles.searchAvatarSquare} />
+                          ) : (
+                            <View style={[styles.searchAvatarSquare, { backgroundColor: colorForIndex(i) }]}>
+                              <Text style={styles.searchInitials}>{initials(a.name)}</Text>
+                            </View>
+                          )}
+                          <View style={styles.searchInfo}>
+                            <Text style={styles.searchTitle}>{a.name}</Text>
+                            <Text style={styles.searchSub}>{a.artists[0]?.name}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Featured Card */}
@@ -249,34 +349,52 @@ export default function HomeScreen() {
         )}
 
         {/* Discover Artists */}
-        <SectionHeader title="Discover Artists" onPress={() => {}} />
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={artists}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => <ArtistCard item={item} index={index} />}
-          contentContainerStyle={styles.horizontalList}
-        />
+        {artists.length > 0 && (
+          <>
+            <SectionHeader title="Discover Artists" onPress={() => {}} />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={artists}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item, index }) => <ArtistCard item={item} index={index} />}
+              contentContainerStyle={styles.horizontalList}
+            />
+          </>
+        )}
 
         {/* Trending Now */}
-        <SectionHeader title="Trending Now" onPress={() => {}} />
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={tracks}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => <TrendingCard item={item} index={index} />}
-          contentContainerStyle={styles.horizontalList}
-        />
+        {tracks.length > 0 && (
+          <>
+            <SectionHeader title="Trending Now" onPress={() => {}} />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={tracks}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item, index }) => <TrendingCard item={item} index={index} />}
+              contentContainerStyle={styles.horizontalList}
+            />
+          </>
+        )}
 
         {/* New Releases */}
-        <SectionHeader title="New Releases" onPress={() => {}} />
-        <View style={styles.releaseList}>
-          {releases.map((item, index) => (
-            <ReleaseRow key={item.id} item={item} index={index} />
-          ))}
-        </View>
+        {releases.length > 0 && (
+          <>
+            <SectionHeader title="New Releases" onPress={() => {}} />
+            <View style={styles.releaseList}>
+              {releases.map((item, index) => (
+                <ReleaseRow key={item.id} item={item} index={index} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {artists.length === 0 && tracks.length === 0 && releases.length === 0 && (
+          <View style={styles.emptyHome}>
+            <Text style={styles.emptyHomeText}>Play some music on Spotify to see your personalised content here.</Text>
+          </View>
+        )}
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -325,11 +443,10 @@ const styles = StyleSheet.create({
   },
   headerAvatarImage: { width: 42, height: 42, borderRadius: 21 },
   headerAvatarText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  searchWrapper: { marginHorizontal: 20, marginBottom: 24 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 20,
-    marginBottom: 24,
     backgroundColor: MC.surface,
     borderRadius: 14,
     paddingHorizontal: 14,
@@ -339,6 +456,53 @@ const styles = StyleSheet.create({
   },
   searchIcon: { fontSize: 20, color: MC.textMuted, marginRight: 10 },
   searchInput: { flex: 1, fontSize: 15, color: MC.textPrimary, padding: 0 },
+  searchClear: { fontSize: 14, color: MC.textMuted, paddingLeft: 8 },
+  searchResults: {
+    backgroundColor: MC.surfaceElevated,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: MC.border,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  searchSection: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: MC.textMuted,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  searchAvatarRound: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  searchAvatarSquare: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  searchInitials: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  searchInfo: { flex: 1 },
+  searchTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 14 },
+  searchSub: { color: MC.textSecondary, fontSize: 12, marginTop: 2 },
   featuredCard: {
     marginHorizontal: 20,
     marginBottom: 28,
@@ -459,4 +623,6 @@ const styles = StyleSheet.create({
   likeButton: { paddingLeft: 12 },
   likeIcon: { fontSize: 22, color: MC.textMuted },
   likeIconActive: { color: MC.accent },
+  emptyHome: { paddingHorizontal: 20, paddingTop: 20, alignItems: "center" },
+  emptyHomeText: { color: MC.textMuted, fontSize: 14, textAlign: "center", lineHeight: 22 },
 });

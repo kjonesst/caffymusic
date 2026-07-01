@@ -90,3 +90,23 @@ export async function getRecentlyPlayed(token: string, limit = 20): Promise<Rece
   const data = await get<{ items: RecentlyPlayed[] }>(`/me/player/recently-played?limit=${limit}`, token);
   return data.items;
 }
+
+export type SearchResults = {
+  tracks: SpotifyTrack[];
+  artists: SpotifyArtist[];
+  albums: SpotifyAlbum[];
+};
+
+export async function search(token: string, query: string): Promise<SearchResults> {
+  const encoded = encodeURIComponent(query);
+  const data = await get<{
+    tracks: { items: SpotifyTrack[] };
+    artists: { items: SpotifyArtist[] };
+    albums: { items: SpotifyAlbum[] };
+  }>(`/search?q=${encoded}&type=track,artist,album&limit=5`, token);
+  return {
+    tracks: data.tracks.items,
+    artists: data.artists.items,
+    albums: data.albums.items,
+  };
+}

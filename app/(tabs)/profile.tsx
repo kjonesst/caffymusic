@@ -104,7 +104,7 @@ function HistoryRow({ item }: { item: RecentlyPlayed }) {
 }
 
 export default function ProfileScreen() {
-  const { token, logout } = useSpotifyAuth();
+  const { token } = useSpotifyAuth();
   const router = useRouter();
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [topArtists, setTopArtists] = useState<SpotifyArtist[]>([]);
@@ -152,17 +152,12 @@ export default function ProfileScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.settingsBtn} onPress={logout}>
-              <Text style={styles.settingsBtnText}>↩</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingsBtn}
-              onPress={() => router.push("/settings")}
-            >
-              <Text style={styles.settingsBtnText}>⚙</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.settingsBtn}
+            onPress={() => router.push("/settings")}
+          >
+            <Text style={styles.settingsBtnText}>⚙</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Avatar + Name */}
@@ -246,7 +241,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   settingsBtnText: { fontSize: 16, color: MC.textSecondary },
-  headerActions: { flexDirection: "row", gap: 8 },
   profileSection: { alignItems: "center", paddingBottom: 28 },
   avatarContainer: {
     width: 88,
