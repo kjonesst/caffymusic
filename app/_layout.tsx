@@ -1,25 +1,53 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { useEffect } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { SpotifyAuthProvider, useSpotifyAuth } from '@/context/spotify-auth-context';
+import { LocalTracksProvider } from '@/context/local-tracks-context';
+import { FavoritesProvider } from '@/context/favorites-context';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+function AuthGate() {
+  const { token } = useSpotifyAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!segments.length) return;
+    const inLoginScreen = segments[0] === 'login';
+    const timeout = setTimeout(() => {
+      if (!token && !inLoginScreen) {
+        router.replace('/login');
+      } else if (token && inLoginScreen) {
+        router.replace('/(tabs)');
+      }
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [token, segments]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
+      <SpotifyAuthProvider>
+      <FavoritesProvider>
+      <LocalTracksProvider>
+        <Stack>
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+        </Stack>
+        <AuthGate />
+        <StatusBar style="auto" />
+      </LocalTracksProvider>
+      </FavoritesProvider>
+      </SpotifyAuthProvider>
     </ThemeProvider>
   );
 }

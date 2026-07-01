@@ -1,3 +1,4 @@
+import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -80,6 +81,7 @@ const DOWNLOAD_OPTIONS = ["Normal (96 kbps)", "High (160 kbps)", "Very High (320
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { logout } = useSpotifyAuth();
   const [streamingQuality, setStreamingQuality] = useState("High (160 kbps)");
   const [downloadQuality, setDownloadQuality] = useState("High (160 kbps)");
   const [wifiOnly, setWifiOnly] = useState(true);
@@ -311,7 +313,7 @@ export default function SettingsScreen() {
               onPress={() =>
                 Alert.alert("Sign Out", "Are you sure you want to sign out?", [
                   { text: "Cancel", style: "cancel" },
-                  { text: "Sign Out", style: "destructive", onPress: () => {} },
+                  { text: "Sign Out", style: "destructive", onPress: logout },
                 ])
               }
               destructive
