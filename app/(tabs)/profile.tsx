@@ -337,7 +337,7 @@ ANALYSIS:
         {/* AI Taste Profile */}
         <View style={styles.section}>
           <TypewriterText
-            text="Let us analyse your caffinated taste in music."
+            text="Let us analyse your music library and figure your caffinated taste in music."
             style={styles.typewriterIntro}
             highlightWord="caffinated"
           />
