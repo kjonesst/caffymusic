@@ -1,8 +1,10 @@
 import { MC } from "@/constants/theme";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
+import { useLocalTracks } from "@/context/local-tracks-context";
 import {
   getMe,
   getTopArtists,
+  getTopTracks,
   getRecentlyPlayed,
   getSavedTracks,
   getPlaylists,
@@ -10,6 +12,7 @@ import {
   RecentlyPlayed,
   SpotifyUser,
 } from "@/services/spotify";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -23,6 +26,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const TASTE_PROFILE_KEY = "caffy_taste_profile";
+const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!;
 
 const AVATAR_COLORS = [
   "#7A1E2A", "#5E3E82", "#3E5E82", "#3E825E",
@@ -105,6 +111,7 @@ function HistoryRow({ item }: { item: RecentlyPlayed }) {
 
 export default function ProfileScreen() {
   const { token } = useSpotifyAuth();
+  const { tracks: localTracks } = useLocalTracks();
   const router = useRouter();
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [topArtists, setTopArtists] = useState<SpotifyArtist[]>([]);
@@ -112,6 +119,9 @@ export default function ProfileScreen() {
   const [savedCount, setSavedCount] = useState(0);
   const [playlistCount, setPlaylistCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [tasteProfile, setTasteProfile] = useState<{ summary: string; analysis: string } | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -129,6 +139,105 @@ export default function ProfileScreen() {
       setPlaylistCount(playlists.length);
     }).finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(TASTE_PROFILE_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        setTasteProfile(JSON.parse(raw));
+      } catch {
+        // stale plain-string cache — discard it
+        AsyncStorage.removeItem(TASTE_PROFILE_KEY);
+      }
+    });
+  }, []);
+
+  async function generateProfile() {
+    if (!token) return;
+    setGenerating(true);
+    setGenError(null);
+    setTasteProfile(null);
+    try {
+      const [topArtistsFull, topTracks, savedTracks] = await Promise.all([
+        getTopArtists(token, 10),
+        getTopTracks(token, 10),
+        getSavedTracks(token, 30),
+      ]);
+
+      const artistLines = topArtistsFull
+        .map((a) => `${a.name} (${a.genres.slice(0, 3).join(", ") || "unknown genre"})`)
+        .join("\n");
+
+      const trackLines = topTracks
+        .map((t) => `${t.name} by ${t.artists.map((a) => a.name).join(", ")} (popularity ${t.popularity})`)
+        .join("\n");
+
+      const savedLines = savedTracks
+        .slice(0, 20)
+        .map((s) => `${s.track.name} by ${s.track.artists.map((a) => a.name).join(", ")}`)
+        .join("\n");
+
+      const localLines = localTracks.map((t) => t.name).join("\n");
+
+      const prompt = `You are a music taste analyst with a deep knowledge of genres, subcultures, and listening patterns. Based on the following data about a listener's music habits, write a vivid, insightful, personal description of their music taste. Be specific, reference actual artists and genres mentioned, and avoid generic statements. Write 2–3 paragraphs in second person ("You..."). Make it feel like a bespoke profile, not a template.
+
+TOP ARTISTS (this month):
+${artistLines}
+
+TOP TRACKS (recent):
+${trackLines}
+
+SAVED TRACKS (sample):
+${savedLines}
+
+${localLines ? `LOCAL FILES ON DEVICE:\n${localLines}` : ""}
+
+Respond in exactly this structure:
+
+SUMMARY: [One punchy sentence that captures the essence of their taste — like a headline for their musical identity.]
+
+ANALYSIS:
+[2–3 paragraphs in second person ("You…") going deeper — reference specific artists, genres, and patterns. Be vivid and specific, not generic.]`;
+
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any)?.error?.message ?? `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const raw = data?.content?.find((b: any) => b.type === "text")?.text ?? "";
+      if (!raw) throw new Error("No response from Claude.");
+
+      const summaryMatch = raw.match(/SUMMARY:\s*(.+?)(?:\n|$)/s);
+      const analysisMatch = raw.match(/ANALYSIS:\s*([\s\S]+)/);
+      const profile = {
+        summary: summaryMatch?.[1]?.trim() ?? "",
+        analysis: analysisMatch?.[1]?.trim() ?? raw.trim(),
+      };
+
+      setTasteProfile(profile);
+      await AsyncStorage.setItem(TASTE_PROFILE_KEY, JSON.stringify(profile));
+    } catch (e: any) {
+      setGenError(e?.message ?? "Something went wrong. Try again.");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -179,6 +288,57 @@ export default function ProfileScreen() {
           <StatCard label="Saved" value={String(savedCount)} />
           <StatCard label="Playlists" value={String(playlistCount)} />
           <StatCard label="Artists" value={String(topArtists.length > 0 ? "∞" : "0")} />
+        </View>
+
+        {/* AI Taste Profile */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Your Music Taste</Text>
+            {tasteProfile && !generating && (
+              <TouchableOpacity onPress={generateProfile} style={styles.regenBtn}>
+                <Text style={styles.regenBtnText}>Regenerate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {!tasteProfile && !generating && !genError && (
+            <TouchableOpacity style={styles.generateBtn} onPress={generateProfile} activeOpacity={0.8}>
+              <Text style={styles.generateBtnIcon}>✦</Text>
+              <Text style={styles.generateBtnText}>Generate My Taste Profile</Text>
+            </TouchableOpacity>
+          )}
+
+          {generating && (
+            <View style={[styles.card, styles.profileCard]}>
+              <View style={styles.profileLoading}>
+                <ActivityIndicator color={MC.accent} size="small" />
+                <Text style={styles.profileLoadingText}>Analysing your listening…</Text>
+              </View>
+            </View>
+          )}
+
+          {tasteProfile && !generating && (
+            <View style={[styles.card, styles.profileCard]}>
+              {tasteProfile.summary ? (
+                <>
+                  <Text style={styles.profileSummary}>{tasteProfile.summary}</Text>
+                  {tasteProfile.analysis ? <View style={styles.profileDivider} /> : null}
+                </>
+              ) : null}
+              {tasteProfile.analysis ? (
+                <Text style={styles.profileText}>{tasteProfile.analysis}</Text>
+              ) : null}
+            </View>
+          )}
+
+          {genError && !generating && (
+            <View style={[styles.card, styles.profileCard]}>
+              <Text style={styles.profileError}>{genError}</Text>
+              <TouchableOpacity onPress={generateProfile} style={styles.retryBtn}>
+                <Text style={styles.retryBtnText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Top Artists */}
@@ -328,4 +488,29 @@ const styles = StyleSheet.create({
   historyTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 14 },
   historyArtist: { color: MC.textSecondary, fontSize: 12, marginTop: 2 },
   historyWhen: { color: MC.textMuted, fontSize: 11 },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  regenBtn: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: MC.border },
+  regenBtnText: { color: MC.textMuted, fontSize: 11, fontWeight: "600" },
+  generateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: MC.accent,
+    backgroundColor: MC.surface,
+  },
+  generateBtnIcon: { fontSize: 18, color: MC.accent },
+  generateBtnText: { fontSize: 15, fontWeight: "700", color: MC.accent, letterSpacing: -0.2 },
+  profileCard: { padding: 18 },
+  profileSummary: { color: MC.accent, fontSize: 16, fontWeight: "700", lineHeight: 23, letterSpacing: -0.2 },
+  profileDivider: { height: 1, backgroundColor: MC.border, marginVertical: 14 },
+  profileText: { color: MC.textPrimary, fontSize: 14, lineHeight: 22, letterSpacing: 0.1 },
+  profileLoading: { flexDirection: "row", alignItems: "center", gap: 10 },
+  profileLoadingText: { color: MC.textMuted, fontSize: 13, fontStyle: "italic" },
+  profileError: { color: "#E57373", fontSize: 13, marginBottom: 12 },
+  retryBtn: { alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, backgroundColor: MC.surface, borderWidth: 1, borderColor: MC.border },
+  retryBtnText: { color: MC.textSecondary, fontSize: 12, fontWeight: "600" },
 });
