@@ -25,6 +25,7 @@ export const MC = {
   surfaceElevated: "#24202E",
   accent: "#C8965B",
   accentLight: "#E8B47A",
+  paleYellow: "#F0E6A8",
   textPrimary: "#F5F0EC",
   textSecondary: "#9E9589",
   textMuted: "#5C5650",
