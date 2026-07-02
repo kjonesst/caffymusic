@@ -13,6 +13,7 @@ import {
   SpotifyTrack,
   SearchResults,
 } from "@/services/spotify";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -186,6 +187,7 @@ function SearchTrackRow({ track, index, onPress }: { track: SpotifyTrack; index:
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { token } = useSpotifyAuth();
   const { favorites } = useFavorites();
   const [searchQuery, setSearchQuery] = useState("");
@@ -263,13 +265,17 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.userName}>{userName}</Text>
           </View>
-          <View style={styles.headerAvatar}>
+          <TouchableOpacity
+            style={styles.headerAvatar}
+            activeOpacity={0.75}
+            onPress={() => router.push("/profile")}
+          >
             {userImage ? (
               <Image source={{ uri: userImage }} style={styles.headerAvatarImage} />
             ) : (
               <Text style={styles.headerAvatarText}>{initials(userName)}</Text>
             )}
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Search Bar */}
