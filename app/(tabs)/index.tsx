@@ -14,6 +14,7 @@ import {
   SpotifyTrack,
 } from "@/services/spotify";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -87,33 +88,55 @@ function IntroModal({
   onDismiss: () => void;
 }) {
   const fade = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.92)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
+  const btnScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!visible) return;
     fade.setValue(0);
-    scale.setValue(0.92);
+    scale.setValue(0.8);
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
-        duration: 280,
+        duration: 300,
         useNativeDriver: true,
       }),
       Animated.spring(scale, {
         toValue: 1,
-        friction: 8,
-        tension: 60,
+        friction: 6,
+        tension: 80,
         useNativeDriver: true,
       }),
     ]).start();
   }, [visible, fade, scale]);
+
+  function handlePressIn() {
+    Animated.spring(btnScale, {
+      toValue: 0.94,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
+  }
+
+  function handlePressOut() {
+    Animated.spring(btnScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
+  }
+
+  function handleDismiss() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onDismiss();
+  }
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onDismiss}
+      onRequestClose={handleDismiss}
     >
       <Animated.View style={[styles.introBackdrop, { opacity: fade }]}>
         <Animated.View style={[styles.introCard, { transform: [{ scale }] }]}>
@@ -126,13 +149,19 @@ function IntroModal({
             to your Profile to generate an AI-written description of your unique
             taste in music, brewed fresh whenever you like.
           </Text>
-          <TouchableOpacity
-            style={styles.introBtn}
-            onPress={onDismiss}
-            activeOpacity={0.85}
+          <Animated.View
+            style={{ transform: [{ scale: btnScale }], width: "100%" }}
           >
-            <Text style={styles.introBtnText}>Got it</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.introBtn}
+              onPress={handleDismiss}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              activeOpacity={1}
+            >
+              <Text style={styles.introBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -422,10 +451,14 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Wordmark */}
-        <View style={styles.wordmarkRow}>
+        <TouchableOpacity
+          style={styles.wordmarkRow}
+          onPress={() => setShowIntro(true)}
+          activeOpacity={0.7}
+        >
           <Text style={styles.wordmark}>caffy</Text>
           <Text style={styles.wordmarkNote}>☕️</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Header */}
         <View style={styles.header}>
@@ -1014,8 +1047,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   introCupImage: {
-    width: 180,
-    height: 180,
+    width: 220,
+    height: 220,
     marginBottom: 10,
     resizeMode: "contain",
   },
