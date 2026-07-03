@@ -1,24 +1,28 @@
 import MiniPlayer from "@/components/MiniPlayer";
 import { MC } from "@/constants/theme";
-import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import { useFavorites } from "@/context/favorites-context";
+import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
   getMe,
   getNewReleases,
   getTopArtists,
   getTopTracks,
   search,
+  SearchResults,
   SpotifyAlbum,
   SpotifyArtist,
   SpotifyTrack,
-  SearchResults,
 } from "@/services/spotify";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -30,9 +34,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const AVATAR_COLORS = [
-  "#7A1E2A", "#5E3E82", "#3E5E82", "#3E825E",
-  "#823E5E", "#825E3E", "#3E8282", "#6E5E3E",
+  "#7A1E2A",
+  "#5E3E82",
+  "#3E5E82",
+  "#3E825E",
+  "#823E5E",
+  "#825E3E",
+  "#3E8282",
+  "#6E5E3E",
 ];
+
+const HOME_INTRO_SEEN_KEY = "caffy_home_intro_seen";
 
 function colorForIndex(index: number) {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
@@ -54,7 +66,115 @@ function greeting() {
   return "Good evening";
 }
 
-function SectionHeader({ title, onPress }: { title: string; onPress?: () => void }) {
+const CUP_FRAMES = [
+  require("../../assets/images/loading-cup-1.png"),
+  require("../../assets/images/loading-cup-2.png"),
+];
+
+function AnimatedCup() {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % 2), 500);
+    return () => clearInterval(id);
+  }, []);
+  return <Image source={CUP_FRAMES[frame]} style={styles.introCupImage} />;
+}
+
+function IntroModal({
+  visible,
+  onDismiss,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+}) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
+  const btnScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    fade.setValue(0);
+    scale.setValue(0.8);
+    Animated.parallel([
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 6,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [visible, fade, scale]);
+
+  function handlePressIn() {
+    Animated.spring(btnScale, {
+      toValue: 0.94,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
+  }
+
+  function handlePressOut() {
+    Animated.spring(btnScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
+  }
+
+  function handleDismiss() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onDismiss();
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={handleDismiss}
+    >
+      <Animated.View style={[styles.introBackdrop, { opacity: fade }]}>
+        <Animated.View style={[styles.introCard, { transform: [{ scale }] }]}>
+          <AnimatedCup />
+          <Text style={styles.introTitle}>Welcome to caffy</Text>
+          <Text style={styles.introBody}>
+            Caffy looks at your connected Spotify account — top artists, top
+            tracks, saved songs, and recent listening — along with any local
+            files on your device, to build a picture of your music library. Head
+            to your Profile to generate an AI-written description of your unique
+            taste in music, brewed fresh whenever you like.
+          </Text>
+          <Animated.View
+            style={{ transform: [{ scale: btnScale }], width: "100%" }}
+          >
+            <TouchableOpacity
+              style={styles.introBtn}
+              onPress={handleDismiss}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              activeOpacity={1}
+            >
+              <Text style={styles.introBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+function SectionHeader({
+  title,
+  onPress,
+}: {
+  title: string;
+  onPress?: () => void;
+}) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -79,38 +199,73 @@ function ArtistCard({ item, index }: { item: SpotifyArtist; index: number }) {
           <Text style={styles.artistInitials}>{initials(item.name)}</Text>
         </View>
       )}
-      <Text style={styles.artistName} numberOfLines={1}>{item.name}</Text>
-      <Text style={styles.artistGenre} numberOfLines={1}>{item.genres[0] ?? "Artist"}</Text>
+      <Text style={styles.artistName} numberOfLines={1}>
+        {item.name}
+      </Text>
+      <Text style={styles.artistGenre} numberOfLines={1}>
+        {item.genres[0] ?? "Artist"}
+      </Text>
     </TouchableOpacity>
   );
 }
 
-function TrendingCard({ item, index, onPress }: { item: SpotifyTrack; index: number; onPress: () => void }) {
+function TrendingCard({
+  item,
+  index,
+  onPress,
+}: {
+  item: SpotifyTrack;
+  index: number;
+  onPress: () => void;
+}) {
   const imageUrl = item.album.images[0]?.url;
   const color = colorForIndex(index);
   const rank = String(index + 1).padStart(2, "0");
   return (
-    <TouchableOpacity style={styles.trendingCard} activeOpacity={0.75} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.trendingCard}
+      activeOpacity={0.75}
+      onPress={onPress}
+    >
       <View style={[styles.trendingTop, { backgroundColor: color }]}>
         {imageUrl && (
-          <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFillObject} />
+          <Image
+            source={{ uri: imageUrl }}
+            style={StyleSheet.absoluteFillObject}
+          />
         )}
         <Text style={styles.trendingRank}>{rank}</Text>
       </View>
       <View style={styles.trendingBottom}>
-        <Text style={styles.trendingTitle} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.trendingArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
+        <Text style={styles.trendingTitle} numberOfLines={2}>
+          {item.name}
+        </Text>
+        <Text style={styles.trendingArtist} numberOfLines={1}>
+          {item.artists[0]?.name}
+        </Text>
         <Text style={styles.trendingPlays}>{item.popularity}% popularity</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-function FavouriteTrackCard({ item, index, onPress }: { item: SpotifyTrack; index: number; onPress: () => void }) {
+function FavouriteTrackCard({
+  item,
+  index,
+  onPress,
+}: {
+  item: SpotifyTrack;
+  index: number;
+  onPress: () => void;
+}) {
   const imageUrl = item.album.images[0]?.url;
   const color = colorForIndex(index);
   return (
-    <TouchableOpacity style={styles.favCard} activeOpacity={0.75} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.favCard}
+      activeOpacity={0.75}
+      onPress={onPress}
+    >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.favArt} />
       ) : (
@@ -118,8 +273,12 @@ function FavouriteTrackCard({ item, index, onPress }: { item: SpotifyTrack; inde
           <Text style={styles.favInitials}>{initials(item.name)}</Text>
         </View>
       )}
-      <Text style={styles.favTitle} numberOfLines={1}>{item.name}</Text>
-      <Text style={styles.favArtist} numberOfLines={1}>{item.artists[0]?.name}</Text>
+      <Text style={styles.favTitle} numberOfLines={1}>
+        {item.name}
+      </Text>
+      <Text style={styles.favArtist} numberOfLines={1}>
+        {item.artists[0]?.name}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -129,7 +288,8 @@ function ReleaseRow({ item, index }: { item: SpotifyAlbum; index: number }) {
   const imageUrl = item.images[0]?.url;
   const color = colorForIndex(index);
   const meta =
-    item.album_type.charAt(0).toUpperCase() + item.album_type.slice(1) +
+    item.album_type.charAt(0).toUpperCase() +
+    item.album_type.slice(1) +
     (item.total_tracks > 1 ? ` • ${item.total_tracks} tracks` : "");
   return (
     <TouchableOpacity style={styles.releaseRow} activeOpacity={0.75}>
@@ -158,15 +318,35 @@ function ReleaseRow({ item, index }: { item: SpotifyAlbum; index: number }) {
   );
 }
 
-function SearchTrackRow({ track, index, onPress }: { track: SpotifyTrack; index: number; onPress: () => void }) {
+function SearchTrackRow({
+  track,
+  index,
+  onPress,
+}: {
+  track: SpotifyTrack;
+  index: number;
+  onPress: () => void;
+}) {
   const { isFavorited, toggleFavorite } = useFavorites();
   const fav = isFavorited(track.id);
   return (
-    <TouchableOpacity style={styles.searchRow} activeOpacity={0.75} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.searchRow}
+      activeOpacity={0.75}
+      onPress={onPress}
+    >
       {track.album.images[0]?.url ? (
-        <Image source={{ uri: track.album.images[0].url }} style={styles.searchAvatarSquare} />
+        <Image
+          source={{ uri: track.album.images[0].url }}
+          style={styles.searchAvatarSquare}
+        />
       ) : (
-        <View style={[styles.searchAvatarSquare, { backgroundColor: colorForIndex(index) }]}>
+        <View
+          style={[
+            styles.searchAvatarSquare,
+            { backgroundColor: colorForIndex(index) },
+          ]}
+        >
           <Text style={styles.searchInitials}>{initials(track.name)}</Text>
         </View>
       )}
@@ -191,7 +371,9 @@ export default function HomeScreen() {
   const { token } = useSpotifyAuth();
   const { favorites } = useFavorites();
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(
+    null,
+  );
   const [searching, setSearching] = useState(false);
   const [userName, setUserName] = useState("");
   const [userImage, setUserImage] = useState<string | null>(null);
@@ -200,6 +382,18 @@ export default function HomeScreen() {
   const [releases, setReleases] = useState<SpotifyAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTrack, setCurrentTrack] = useState<SpotifyTrack | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HOME_INTRO_SEEN_KEY).then((seen) => {
+      if (!seen) setShowIntro(true);
+    });
+  }, []);
+
+  function dismissIntro() {
+    setShowIntro(false);
+    AsyncStorage.setItem(HOME_INTRO_SEEN_KEY, "1");
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -208,14 +402,16 @@ export default function HomeScreen() {
       getTopArtists(token),
       getTopTracks(token),
       getNewReleases(token),
-    ]).then(([me, topArtists, topTracks, newReleases]) => {
-      setUserName(me.display_name);
-      setUserImage(me.images[0]?.url ?? null);
-      setArtists(topArtists);
-      setTracks(topTracks);
-      setReleases(newReleases);
-    }).catch((e) => console.log('Home fetch error:', e.message))
-    .finally(() => setLoading(false));
+    ])
+      .then(([me, topArtists, topTracks, newReleases]) => {
+        setUserName(me.display_name);
+        setUserImage(me.images[0]?.url ?? null);
+        setArtists(topArtists);
+        setTracks(topTracks);
+        setReleases(newReleases);
+      })
+      .catch((e) => console.log("Home fetch error:", e.message))
+      .finally(() => setLoading(false));
   }, [token]);
 
   useEffect(() => {
@@ -241,6 +437,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
         <ActivityIndicator color={MC.accent} size="large" />
+        <IntroModal visible={showIntro} onDismiss={dismissIntro} />
       </SafeAreaView>
     );
   }
@@ -254,10 +451,14 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Wordmark */}
-        <View style={styles.wordmarkRow}>
+        <TouchableOpacity
+          style={styles.wordmarkRow}
+          onPress={() => setShowIntro(true)}
+          activeOpacity={0.7}
+        >
           <Text style={styles.wordmark}>caffy</Text>
           <Text style={styles.wordmarkNote}>☕️</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Header */}
         <View style={styles.header}>
@@ -271,7 +472,10 @@ export default function HomeScreen() {
             onPress={() => router.push("/profile")}
           >
             {userImage ? (
-              <Image source={{ uri: userImage }} style={styles.headerAvatarImage} />
+              <Image
+                source={{ uri: userImage }}
+                style={styles.headerAvatarImage}
+              />
             ) : (
               <Text style={styles.headerAvatarText}>{initials(userName)}</Text>
             )}
@@ -300,24 +504,42 @@ export default function HomeScreen() {
           {/* Search Results */}
           {(searchResults || searching) && (
             <View style={styles.searchResults}>
-              {searching && <ActivityIndicator color={MC.accent} style={{ padding: 16 }} />}
+              {searching && (
+                <ActivityIndicator color={MC.accent} style={{ padding: 16 }} />
+              )}
               {searchResults && !searching && (
                 <>
                   {searchResults.artists.length > 0 && (
                     <>
                       <Text style={styles.searchSection}>Artists</Text>
                       {searchResults.artists.map((a, i) => (
-                        <TouchableOpacity key={a.id} style={styles.searchRow} activeOpacity={0.75}>
+                        <TouchableOpacity
+                          key={a.id}
+                          style={styles.searchRow}
+                          activeOpacity={0.75}
+                        >
                           {a.images[0]?.url ? (
-                            <Image source={{ uri: a.images[0].url }} style={styles.searchAvatarRound} />
+                            <Image
+                              source={{ uri: a.images[0].url }}
+                              style={styles.searchAvatarRound}
+                            />
                           ) : (
-                            <View style={[styles.searchAvatarRound, { backgroundColor: colorForIndex(i) }]}>
-                              <Text style={styles.searchInitials}>{initials(a.name)}</Text>
+                            <View
+                              style={[
+                                styles.searchAvatarRound,
+                                { backgroundColor: colorForIndex(i) },
+                              ]}
+                            >
+                              <Text style={styles.searchInitials}>
+                                {initials(a.name)}
+                              </Text>
                             </View>
                           )}
                           <View style={styles.searchInfo}>
                             <Text style={styles.searchTitle}>{a.name}</Text>
-                            <Text style={styles.searchSub}>{a.genres?.[0] ?? "Artist"}</Text>
+                            <Text style={styles.searchSub}>
+                              {a.genres?.[0] ?? "Artist"}
+                            </Text>
                           </View>
                         </TouchableOpacity>
                       ))}
@@ -327,7 +549,12 @@ export default function HomeScreen() {
                     <>
                       <Text style={styles.searchSection}>Songs</Text>
                       {searchResults.tracks.map((t, i) => (
-                        <SearchTrackRow key={t.id} track={t} index={i} onPress={() => setCurrentTrack(t)} />
+                        <SearchTrackRow
+                          key={t.id}
+                          track={t}
+                          index={i}
+                          onPress={() => setCurrentTrack(t)}
+                        />
                       ))}
                     </>
                   )}
@@ -335,17 +562,33 @@ export default function HomeScreen() {
                     <>
                       <Text style={styles.searchSection}>Albums</Text>
                       {searchResults.albums.map((a, i) => (
-                        <TouchableOpacity key={a.id} style={styles.searchRow} activeOpacity={0.75}>
+                        <TouchableOpacity
+                          key={a.id}
+                          style={styles.searchRow}
+                          activeOpacity={0.75}
+                        >
                           {a.images[0]?.url ? (
-                            <Image source={{ uri: a.images[0].url }} style={styles.searchAvatarSquare} />
+                            <Image
+                              source={{ uri: a.images[0].url }}
+                              style={styles.searchAvatarSquare}
+                            />
                           ) : (
-                            <View style={[styles.searchAvatarSquare, { backgroundColor: colorForIndex(i) }]}>
-                              <Text style={styles.searchInitials}>{initials(a.name)}</Text>
+                            <View
+                              style={[
+                                styles.searchAvatarSquare,
+                                { backgroundColor: colorForIndex(i) },
+                              ]}
+                            >
+                              <Text style={styles.searchInitials}>
+                                {initials(a.name)}
+                              </Text>
                             </View>
                           )}
                           <View style={styles.searchInfo}>
                             <Text style={styles.searchTitle}>{a.name}</Text>
-                            <Text style={styles.searchSub}>{a.artists[0]?.name}</Text>
+                            <Text style={styles.searchSub}>
+                              {a.artists[0]?.name}
+                            </Text>
                           </View>
                         </TouchableOpacity>
                       ))}
@@ -366,7 +609,10 @@ export default function HomeScreen() {
             {featured.images[0]?.url && (
               <Image
                 source={{ uri: featured.images[0].url }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 20, opacity: 0.4 }]}
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  { borderRadius: 20, opacity: 0.4 },
+                ]}
               />
             )}
             <View style={styles.featuredBadge}>
@@ -375,17 +621,26 @@ export default function HomeScreen() {
             <View style={styles.featuredContent}>
               <View style={styles.featuredText}>
                 <Text style={styles.featuredName}>{featured.name}</Text>
-                <Text style={styles.featuredTagline}>{featured.genres[0] ?? ""}</Text>
-                <Text style={styles.featuredGenre}>{featured.genres[1] ?? ""}</Text>
+                <Text style={styles.featuredTagline}>
+                  {featured.genres[0] ?? ""}
+                </Text>
+                <Text style={styles.featuredGenre}>
+                  {featured.genres[1] ?? ""}
+                </Text>
                 <TouchableOpacity style={styles.playNowBtn}>
                   <Text style={styles.playNowText}>▶ Listen Now</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.featuredAvatarCircle}>
                 {featured.images[0]?.url ? (
-                  <Image source={{ uri: featured.images[0].url }} style={styles.featuredAvatarImage} />
+                  <Image
+                    source={{ uri: featured.images[0].url }}
+                    style={styles.featuredAvatarImage}
+                  />
                 ) : (
-                  <Text style={styles.featuredAvatarText}>{initials(featured.name)}</Text>
+                  <Text style={styles.featuredAvatarText}>
+                    {initials(featured.name)}
+                  </Text>
                 )}
               </View>
             </View>
@@ -401,7 +656,9 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               data={artists}
               keyExtractor={(item) => item.id}
-              renderItem={({ item, index }) => <ArtistCard item={item} index={index} />}
+              renderItem={({ item, index }) => (
+                <ArtistCard item={item} index={index} />
+              )}
               contentContainerStyle={styles.horizontalList}
             />
           </>
@@ -461,17 +718,28 @@ export default function HomeScreen() {
           </>
         )}
 
-        {artists.length === 0 && tracks.length === 0 && releases.length === 0 && favorites.length === 0 && (
-          <View style={styles.emptyHome}>
-            <Text style={styles.emptyHomeText}>Play some music on Spotify to see your personalised content here.</Text>
-          </View>
-        )}
+        {artists.length === 0 &&
+          tracks.length === 0 &&
+          releases.length === 0 &&
+          favorites.length === 0 && (
+            <View style={styles.emptyHome}>
+              <Text style={styles.emptyHomeText}>
+                Play some music on Spotify to see your personalised content
+                here.
+              </Text>
+            </View>
+          )}
 
         <View style={{ height: currentTrack ? 184 : 24 }} />
       </ScrollView>
       {currentTrack && (
-        <MiniPlayer key={currentTrack.id} track={currentTrack} onClose={() => setCurrentTrack(null)} />
+        <MiniPlayer
+          key={currentTrack.id}
+          track={currentTrack}
+          onClose={() => setCurrentTrack(null)}
+        />
       )}
+      <IntroModal visible={showIntro} onDismiss={dismissIntro} />
     </SafeAreaView>
   );
 }
@@ -505,7 +773,12 @@ const styles = StyleSheet.create({
   },
   wordmarkNote: { fontSize: 16, color: MC.accentLight },
   greeting: { fontSize: 13, color: MC.textSecondary, letterSpacing: 0.3 },
-  userName: { fontSize: 26, fontWeight: "700", color: MC.textPrimary, letterSpacing: -0.5 },
+  userName: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: MC.textPrimary,
+    letterSpacing: -0.5,
+  },
   headerAvatar: {
     width: 42,
     height: 42,
@@ -615,8 +888,16 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 4,
   },
-  featuredTagline: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 2 },
-  featuredGenre: { fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 },
+  featuredTagline: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.7)",
+    marginBottom: 2,
+  },
+  featuredGenre: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.55)",
+    marginBottom: 16,
+  },
   playNowBtn: {
     alignSelf: "flex-start",
     backgroundColor: "#fff",
@@ -643,7 +924,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 14,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "700", color: MC.textPrimary, letterSpacing: -0.3 },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: MC.textPrimary,
+    letterSpacing: -0.3,
+  },
   seeAll: { fontSize: 13, color: MC.accent, fontWeight: "600" },
   horizontalList: { paddingHorizontal: 20, gap: 14, marginBottom: 28 },
   artistCard: { width: 82, alignItems: "center" },
@@ -656,9 +942,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   artistInitials: { color: "#fff", fontWeight: "800", fontSize: 20 },
-  artistName: { color: MC.textPrimary, fontSize: 12, fontWeight: "600", textAlign: "center" },
-  artistGenre: { color: MC.textMuted, fontSize: 10, textAlign: "center", marginTop: 2 },
-  trendingCard: { width: 136, borderRadius: 14, overflow: "hidden", backgroundColor: MC.surface },
+  artistName: {
+    color: MC.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  artistGenre: {
+    color: MC.textMuted,
+    fontSize: 10,
+    textAlign: "center",
+    marginTop: 2,
+  },
+  trendingCard: {
+    width: 136,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: MC.surface,
+  },
   trendingTop: { height: 96, alignItems: "center", justifyContent: "center" },
   trendingRank: {
     color: "rgba(255,255,255,0.35)",
@@ -667,7 +968,12 @@ const styles = StyleSheet.create({
     letterSpacing: -2,
   },
   trendingBottom: { padding: 12, gap: 2 },
-  trendingTitle: { color: MC.textPrimary, fontWeight: "700", fontSize: 13, lineHeight: 17 },
+  trendingTitle: {
+    color: MC.textPrimary,
+    fontWeight: "700",
+    fontSize: 13,
+    lineHeight: 17,
+  },
   trendingArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
   trendingPlays: { color: MC.textMuted, fontSize: 10, marginTop: 4 },
   releaseList: { paddingHorizontal: 20, gap: 4 },
@@ -710,8 +1016,61 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   favInitials: { color: "#fff", fontWeight: "800", fontSize: 20 },
-  favTitle: { color: MC.textPrimary, fontWeight: "600", fontSize: 13, lineHeight: 17 },
+  favTitle: {
+    color: MC.textPrimary,
+    fontWeight: "600",
+    fontSize: 13,
+    lineHeight: 17,
+  },
   favArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
   emptyHome: { paddingHorizontal: 20, paddingTop: 20, alignItems: "center" },
-  emptyHomeText: { color: MC.textMuted, fontSize: 14, textAlign: "center", lineHeight: 22 },
+  emptyHomeText: {
+    color: MC.textMuted,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  introBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  introCard: {
+    width: "100%",
+    backgroundColor: MC.accentLight,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: MC.accent,
+    padding: 24,
+    alignItems: "center",
+  },
+  introCupImage: {
+    width: 220,
+    height: 220,
+    marginBottom: 10,
+    resizeMode: "contain",
+  },
+  introTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: MC.surface,
+    letterSpacing: -0.3,
+    marginBottom: 10,
+  },
+  introBody: {
+    fontSize: 14,
+    color: MC.brownSurface,
+    lineHeight: 21,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  introBtn: {
+    backgroundColor: MC.accent,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+  },
+  introBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 });

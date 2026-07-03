@@ -1,5 +1,6 @@
 import { TypewriterText } from "@/components/typewriter-text";
 import { MC } from "@/constants/theme";
+import * as Haptics from "expo-haptics";
 import { useLocalTracks } from "@/context/local-tracks-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
@@ -179,11 +180,18 @@ export default function ProfileScreen() {
     });
   }, []);
 
+  function fireGenerateHaptics() {
+    [0, 120, 240, 360].forEach((delay) => {
+      setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), delay);
+    });
+  }
+
   async function generateProfile() {
     if (!token) return;
     setGenerating(true);
     setGenError(null);
     setTasteProfile(null);
+    fireGenerateHaptics();
     try {
       const [topArtistsFull, topTracks, savedTracks] = await Promise.all([
         getTopArtists(token, 10),

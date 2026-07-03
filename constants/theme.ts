@@ -30,6 +30,7 @@ export const MC = {
   textSecondary: "#9E9589",
   textMuted: "#5C5650",
   border: "#2A2535",
+  brownSurface: "#3A2F2B",
 };
 
 export const Fonts = Platform.select({
