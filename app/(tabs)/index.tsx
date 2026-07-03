@@ -13,12 +13,15 @@ import {
   SpotifyTrack,
   SearchResults,
 } from "@/services/spotify";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -33,6 +36,8 @@ const AVATAR_COLORS = [
   "#7A1E2A", "#5E3E82", "#3E5E82", "#3E825E",
   "#823E5E", "#825E3E", "#3E8282", "#6E5E3E",
 ];
+
+const HOME_INTRO_SEEN_KEY = "caffy_home_intro_seen";
 
 function colorForIndex(index: number) {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
@@ -52,6 +57,41 @@ function greeting() {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
+}
+
+function IntroModal({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.92)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    fade.setValue(0);
+    scale.setValue(0.92);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 280, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }),
+    ]).start();
+  }, [visible, fade, scale]);
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+      <Animated.View style={[styles.introBackdrop, { opacity: fade }]}>
+        <Animated.View style={[styles.introCard, { transform: [{ scale }] }]}>
+          <Text style={styles.introIcon}>☕️</Text>
+          <Text style={styles.introTitle}>Welcome to caffy</Text>
+          <Text style={styles.introBody}>
+            Caffy looks at your connected Spotify account — top artists, top tracks, saved songs, and
+            recent listening — along with any local files on your device, to build a picture of your
+            music library. Head to your Profile to generate an AI-written description of your unique
+            taste in music, brewed fresh whenever you like.
+          </Text>
+          <TouchableOpacity style={styles.introBtn} onPress={onDismiss} activeOpacity={0.85}>
+            <Text style={styles.introBtnText}>Got it</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
 }
 
 function SectionHeader({ title, onPress }: { title: string; onPress?: () => void }) {
@@ -200,6 +240,18 @@ export default function HomeScreen() {
   const [releases, setReleases] = useState<SpotifyAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTrack, setCurrentTrack] = useState<SpotifyTrack | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HOME_INTRO_SEEN_KEY).then((seen) => {
+      if (!seen) setShowIntro(true);
+    });
+  }, []);
+
+  function dismissIntro() {
+    setShowIntro(false);
+    AsyncStorage.setItem(HOME_INTRO_SEEN_KEY, "1");
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -241,6 +293,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
         <ActivityIndicator color={MC.accent} size="large" />
+        <IntroModal visible={showIntro} onDismiss={dismissIntro} />
       </SafeAreaView>
     );
   }
@@ -472,6 +525,7 @@ export default function HomeScreen() {
       {currentTrack && (
         <MiniPlayer key={currentTrack.id} track={currentTrack} onClose={() => setCurrentTrack(null)} />
       )}
+      <IntroModal visible={showIntro} onDismiss={dismissIntro} />
     </SafeAreaView>
   );
 }
@@ -714,4 +768,42 @@ const styles = StyleSheet.create({
   favArtist: { color: MC.textSecondary, fontSize: 11, marginTop: 2 },
   emptyHome: { paddingHorizontal: 20, paddingTop: 20, alignItems: "center" },
   emptyHomeText: { color: MC.textMuted, fontSize: 14, textAlign: "center", lineHeight: 22 },
+  introBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  introCard: {
+    width: "100%",
+    backgroundColor: MC.surfaceElevated,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: MC.border,
+    padding: 24,
+    alignItems: "center",
+  },
+  introIcon: { fontSize: 32, marginBottom: 12 },
+  introTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: MC.textPrimary,
+    letterSpacing: -0.3,
+    marginBottom: 10,
+  },
+  introBody: {
+    fontSize: 14,
+    color: MC.textSecondary,
+    lineHeight: 21,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  introBtn: {
+    backgroundColor: MC.accent,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+  },
+  introBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 });
