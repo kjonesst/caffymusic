@@ -1,6 +1,5 @@
 import { TypewriterText } from "@/components/typewriter-text";
 import { MC } from "@/constants/theme";
-import * as Haptics from "expo-haptics";
 import { useLocalTracks } from "@/context/local-tracks-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
@@ -16,6 +15,7 @@ import {
 } from "@/services/spotify";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -31,6 +31,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TASTE_PROFILE_KEY = "caffy_taste_profile";
+const TASTE_PROFILE_COUNT_KEY = "caffy_taste_profile_count";
 const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!;
 
 const AVATAR_COLORS = [
@@ -149,6 +150,7 @@ export default function ProfileScreen() {
   } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [tasteCount, setTasteCount] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
   useFocusEffect(
@@ -186,11 +188,18 @@ export default function ProfileScreen() {
         AsyncStorage.removeItem(TASTE_PROFILE_KEY);
       }
     });
+    AsyncStorage.getItem(TASTE_PROFILE_COUNT_KEY).then((raw) => {
+      const count = parseInt(raw ?? "0", 10);
+      setTasteCount(Number.isNaN(count) ? 0 : count);
+    });
   }, []);
 
   function fireGenerateHaptics() {
     [0, 120, 240, 360].forEach((delay) => {
-      setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), delay);
+      setTimeout(
+        () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+        delay,
+      );
     });
   }
 
@@ -286,6 +295,10 @@ ANALYSIS:
 
       setTasteProfile(profile);
       await AsyncStorage.setItem(TASTE_PROFILE_KEY, JSON.stringify(profile));
+
+      const newCount = tasteCount + 1;
+      setTasteCount(newCount);
+      await AsyncStorage.setItem(TASTE_PROFILE_COUNT_KEY, String(newCount));
     } catch (e: any) {
       setGenError(e?.message ?? "Something went wrong. Try again.");
     } finally {
@@ -345,10 +358,7 @@ ANALYSIS:
         <View style={styles.statsRow}>
           <StatCard label="Saved" value={String(savedCount)} />
           <StatCard label="Playlists" value={String(playlistCount)} />
-          <StatCard
-            label="Artists"
-            value={String(topArtists.length > 0 ? "∞" : "0")}
-          />
+          <StatCard label="Tastes" value={String(tasteCount)} />
         </View>
 
         {/* AI Taste Profile */}
