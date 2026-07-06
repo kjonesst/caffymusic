@@ -1,6 +1,5 @@
 import { TypewriterText } from "@/components/typewriter-text";
 import { MC } from "@/constants/theme";
-import * as Haptics from "expo-haptics";
 import { useLocalTracks } from "@/context/local-tracks-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
 import {
@@ -15,10 +14,14 @@ import {
   SpotifyUser,
 } from "@/services/spotify";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Image,
   ScrollView,
   StatusBar,
@@ -30,6 +33,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TASTE_PROFILE_KEY = "caffy_taste_profile";
+const TASTE_PROFILE_COUNT_KEY = "caffy_taste_profile_count";
 const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!;
 
 const AVATAR_COLORS = [
@@ -67,9 +71,36 @@ function timeAgo(dateStr: string) {
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    scale.setValue(1);
+    Animated.sequence([
+      Animated.spring(scale, {
+        toValue: 1.25,
+        speed: 40,
+        bounciness: 14,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        speed: 20,
+        bounciness: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [value]);
+
   return (
     <View style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
+      <Animated.Text style={[styles.statValue, { transform: [{ scale }] }]}>
+        {value}
+      </Animated.Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -99,6 +130,63 @@ function TopArtistRow({ item, index }: { item: SpotifyArtist; index: number }) {
       <View style={styles.topArtistBar}>
         <View style={[styles.topArtistBarFill, { width: barWidth }]} />
       </View>
+    </TouchableOpacity>
+  );
+}
+
+function RegenButton({ onPress }: { onPress: () => void }) {
+  const glow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(glow, {
+          toValue: 0,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [glow]);
+
+  const borderColor = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(200,150,91,0.35)", MC.accent],
+  });
+  const shadowOpacity = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.1, 0.4],
+  });
+  const shadowRadius = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 5],
+  });
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <Animated.View
+        style={[
+          styles.regenBtn,
+          {
+            borderColor,
+            shadowColor: MC.accent,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity,
+            shadowRadius,
+          },
+        ]}
+      >
+        <Text style={styles.regenBtnText}>Recognise Me!</Text>
+      </Animated.View>
     </TouchableOpacity>
   );
 }
@@ -148,6 +236,14 @@ export default function ProfileScreen() {
   } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [tasteCount, setTasteCount] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, []),
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -178,11 +274,18 @@ export default function ProfileScreen() {
         AsyncStorage.removeItem(TASTE_PROFILE_KEY);
       }
     });
+    AsyncStorage.getItem(TASTE_PROFILE_COUNT_KEY).then((raw) => {
+      const count = parseInt(raw ?? "0", 10);
+      setTasteCount(Number.isNaN(count) ? 0 : count);
+    });
   }, []);
 
   function fireGenerateHaptics() {
     [0, 120, 240, 360].forEach((delay) => {
-      setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), delay);
+      setTimeout(
+        () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+        delay,
+      );
     });
   }
 
@@ -278,6 +381,10 @@ ANALYSIS:
 
       setTasteProfile(profile);
       await AsyncStorage.setItem(TASTE_PROFILE_KEY, JSON.stringify(profile));
+
+      const newCount = tasteCount + 1;
+      setTasteCount(newCount);
+      await AsyncStorage.setItem(TASTE_PROFILE_COUNT_KEY, String(newCount));
     } catch (e: any) {
       setGenError(e?.message ?? "Something went wrong. Try again.");
     } finally {
@@ -300,13 +407,16 @@ ANALYSIS:
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor={MC.bg} />
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerTitle}>
+            Your <Text style={styles.headerTitleAccent}>Caffy</Text> Profile,
+          </Text>
           <TouchableOpacity
             style={styles.settingsBtn}
             onPress={() => router.push("/settings")}
@@ -336,10 +446,7 @@ ANALYSIS:
         <View style={styles.statsRow}>
           <StatCard label="Saved" value={String(savedCount)} />
           <StatCard label="Playlists" value={String(playlistCount)} />
-          <StatCard
-            label="Artists"
-            value={String(topArtists.length > 0 ? "∞" : "0")}
-          />
+          <StatCard label="Tastes" value={String(tasteCount)} />
         </View>
 
         {/* AI Taste Profile */}
@@ -352,12 +459,7 @@ ANALYSIS:
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Your Music Taste:</Text>
             {tasteProfile && !generating && (
-              <TouchableOpacity
-                onPress={generateProfile}
-                style={styles.regenBtn}
-              >
-                <Text style={styles.regenBtnText}>Regenerate</Text>
-              </TouchableOpacity>
+              <RegenButton onPress={generateProfile} />
             )}
           </View>
 
@@ -389,16 +491,27 @@ ANALYSIS:
             <View style={[styles.card, styles.profileCard]}>
               {tasteProfile.summary ? (
                 <>
-                  <Text style={styles.profileSummary}>
-                    {tasteProfile.summary}
-                  </Text>
+                  <TypewriterText
+                    text={tasteProfile.summary}
+                    style={styles.profileSummary}
+                    speed={30}
+                  />
                   {tasteProfile.analysis ? (
                     <View style={styles.profileDivider} />
                   ) : null}
                 </>
               ) : null}
               {tasteProfile.analysis ? (
-                <Text style={styles.profileText}>{tasteProfile.analysis}</Text>
+                <TypewriterText
+                  text={tasteProfile.analysis}
+                  style={styles.profileText}
+                  speed={12}
+                  startDelay={
+                    tasteProfile.summary
+                      ? tasteProfile.summary.length * 30 + 300
+                      : 0
+                  }
+                />
               ) : null}
             </View>
           )}
@@ -469,10 +582,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: "800",
     color: MC.textPrimary,
     letterSpacing: -0.5,
+  },
+  headerTitleAccent: {
+    color: MC.accent,
   },
   settingsBtn: {
     width: 36,
@@ -635,7 +751,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: MC.border,
+    borderColor: MC.accent,
+    backgroundColor: MC.bg,
   },
   regenBtnText: { color: MC.textMuted, fontSize: 11, fontWeight: "600" },
   generateBtn: {
