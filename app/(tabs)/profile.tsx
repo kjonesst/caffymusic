@@ -16,6 +16,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
+import { File, Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
@@ -314,9 +315,16 @@ export default function ProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSharingImage(true);
     try {
-      const uri = await captureRef(shareCardRef, { format: "png", quality: 1 });
+      const capturedUri = await captureRef(shareCardRef, {
+        format: "png",
+        quality: 1,
+      });
+      const namedFile = new File(Paths.cache, "myCaffy Taste Profile.png");
+      if (namedFile.exists) namedFile.delete();
+      new File(capturedUri).copy(namedFile);
+
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
+        await Sharing.shareAsync(namedFile.uri, {
           mimeType: "image/png",
           dialogTitle: "Share your Caffy taste profile",
         });
