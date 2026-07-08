@@ -34,14 +34,14 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { captureRef } from "react-native-view-shot";
-import { SafeAreaView } from "react-native-safe-area-context";
 import ReanimatedAnimated, {
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { captureRef } from "react-native-view-shot";
 import { scheduleOnRN } from "react-native-worklets";
 
 const TASTE_PROFILE_KEY = "caffy_taste_profile";
@@ -600,7 +600,10 @@ ANALYSIS:
             <Text style={styles.sectionTitle}>Your Music Taste:</Text>
             {tasteProfile && !generating && (
               <View style={styles.sectionHeaderActions}>
-                <ShareButton onPress={shareTasteProfile} loading={sharingImage} />
+                <ShareButton
+                  onPress={shareTasteProfile}
+                  loading={sharingImage}
+                />
                 <RegenButton onPress={generateProfile} />
               </View>
             )}
@@ -721,12 +724,19 @@ ANALYSIS:
 
       {tasteCardExpanded && tasteProfile && (
         <>
-          <Pressable style={StyleSheet.absoluteFill} onPress={collapseTasteCard}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={collapseTasteCard}
+          >
             <ReanimatedAnimated.View
               style={[StyleSheet.absoluteFill, tasteCardBackdropStyle]}
               pointerEvents="none"
             >
-              <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+              <BlurView
+                intensity={45}
+                tint="dark"
+                style={StyleSheet.absoluteFill}
+              />
               <View style={styles.tasteCardBackdropDim} />
             </ReanimatedAnimated.View>
           </Pressable>
@@ -774,10 +784,14 @@ ANALYSIS:
         <View style={styles.shareCardHidden} pointerEvents="none">
           <View ref={shareCardRef} collapsable={false} style={styles.shareCard}>
             <View style={styles.shareCardBrandRow}>
-              <Text style={styles.shareCardBrandText}>☕ CAFFY</Text>
+              <Text style={styles.shareCardBrandText}>
+                ☕ Music Taste Caffinated...
+              </Text>
             </View>
             {tasteProfile.summary ? (
-              <Text style={styles.shareCardSummary}>{tasteProfile.summary}</Text>
+              <Text style={styles.shareCardSummary}>
+                {tasteProfile.summary}
+              </Text>
             ) : null}
             <View style={styles.shareCardFooterDivider} />
             <Text style={styles.shareCardWatermark}>Made with Caffy</Text>
@@ -1079,7 +1093,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tasteCardCloseBtnText: { color: MC.textSecondary, fontSize: 13, fontWeight: "600" },
+  tasteCardCloseBtnText: {
+    color: MC.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
   shareCardHidden: {
     position: "absolute",
     top: 0,
