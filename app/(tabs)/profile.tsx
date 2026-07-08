@@ -2,6 +2,7 @@ import { TypewriterText } from "@/components/typewriter-text";
 import { MC } from "@/constants/theme";
 import { useLocalTracks } from "@/context/local-tracks-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   getMe,
   getPlaylists,
@@ -165,7 +166,7 @@ function ShareButton({
       {loading ? (
         <ActivityIndicator color={MC.textMuted} size="small" />
       ) : (
-        <Text style={styles.shareBtnText}>↗</Text>
+        <Ionicons name="share-outline" size={18} color={MC.textMuted} />
       )}
     </TouchableOpacity>
   );
@@ -994,11 +995,6 @@ const styles = StyleSheet.create({
   },
   shareBtn: {
     padding: 4,
-  },
-  shareBtnText: {
-    color: MC.textMuted,
-    fontSize: 16,
-    fontWeight: "600",
   },
   regenBtn: {
     paddingHorizontal: 12,
