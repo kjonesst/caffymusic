@@ -15,6 +15,7 @@ import {
 } from "@/services/spotify";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -23,14 +24,23 @@ import {
   Animated,
   Easing,
   Image,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ReanimatedAnimated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 
 const TASTE_PROFILE_KEY = "caffy_taste_profile";
 const TASTE_PROFILE_COUNT_KEY = "caffy_taste_profile_count";
@@ -239,6 +249,88 @@ export default function ProfileScreen() {
   const [tasteCount, setTasteCount] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const tasteCardRef = useRef<View>(null);
+  const [tasteCardExpanded, setTasteCardExpanded] = useState(false);
+  const expandProgress = useSharedValue(0);
+  const cardOrigin = useSharedValue({ x: 0, y: 0, width: 0, height: 0 });
+
+  const tasteCardTarget = {
+    width: winWidth * 0.85,
+    height: winHeight * 0.85,
+    x: winWidth * 0.075,
+    y: winHeight * 0.075,
+  };
+
+  const pullToCloseTriggered = useRef(false);
+
+  function expandTasteCard() {
+    tasteCardRef.current?.measureInWindow((x, y, width, height) => {
+      cardOrigin.value = { x, y, width, height };
+      setTasteCardExpanded(true);
+      pullToCloseTriggered.current = false;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      expandProgress.value = withTiming(1, { duration: 380 });
+    });
+  }
+
+  function collapseTasteCard() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    expandProgress.value = withTiming(0, { duration: 300 }, (finished) => {
+      if (finished) scheduleOnRN(setTasteCardExpanded, false);
+    });
+  }
+
+  function handleTasteCardScroll(e: {
+    nativeEvent: { contentOffset: { y: number } };
+  }) {
+    if (pullToCloseTriggered.current) return;
+    if (e.nativeEvent.contentOffset.y < -70) {
+      pullToCloseTriggered.current = true;
+      collapseTasteCard();
+    }
+  }
+
+  const tasteCardOverlayStyle = useAnimatedStyle(() => {
+    const x = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [cardOrigin.value.x, tasteCardTarget.x],
+    );
+    const y = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [cardOrigin.value.y, tasteCardTarget.y],
+    );
+    const width = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [cardOrigin.value.width, tasteCardTarget.width],
+    );
+    const height = interpolate(
+      expandProgress.value,
+      [0, 1],
+      [cardOrigin.value.height, tasteCardTarget.height],
+    );
+    const borderRadius = interpolate(expandProgress.value, [0, 1], [16, 24]);
+    return {
+      position: "absolute",
+      left: x,
+      top: y,
+      width,
+      height,
+      borderRadius,
+    };
+  });
+
+  const tasteCardBackdropStyle = useAnimatedStyle(() => ({
+    opacity: expandProgress.value,
+  }));
+
+  const tasteCardContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(expandProgress.value, [0.5, 1], [0, 1], "clamp"),
+  }));
+
   useFocusEffect(
     useCallback(() => {
       scrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -411,6 +503,7 @@ ANALYSIS:
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        scrollEnabled={!tasteCardExpanded}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -488,31 +581,41 @@ ANALYSIS:
           )}
 
           {tasteProfile && !generating && (
-            <View style={[styles.card, styles.profileCard]}>
-              {tasteProfile.summary ? (
-                <>
+            <View
+              ref={tasteCardRef}
+              collapsable={false}
+              style={{ opacity: tasteCardExpanded ? 0 : 1 }}
+            >
+              <TouchableOpacity
+                style={[styles.card, styles.profileCard]}
+                activeOpacity={0.9}
+                onPress={expandTasteCard}
+              >
+                {tasteProfile.summary ? (
+                  <>
+                    <TypewriterText
+                      text={tasteProfile.summary}
+                      style={styles.profileSummary}
+                      speed={30}
+                    />
+                    {tasteProfile.analysis ? (
+                      <View style={styles.profileDivider} />
+                    ) : null}
+                  </>
+                ) : null}
+                {tasteProfile.analysis ? (
                   <TypewriterText
-                    text={tasteProfile.summary}
-                    style={styles.profileSummary}
-                    speed={30}
+                    text={tasteProfile.analysis}
+                    style={styles.profileText}
+                    speed={12}
+                    startDelay={
+                      tasteProfile.summary
+                        ? tasteProfile.summary.length * 30 + 300
+                        : 0
+                    }
                   />
-                  {tasteProfile.analysis ? (
-                    <View style={styles.profileDivider} />
-                  ) : null}
-                </>
-              ) : null}
-              {tasteProfile.analysis ? (
-                <TypewriterText
-                  text={tasteProfile.analysis}
-                  style={styles.profileText}
-                  speed={12}
-                  startDelay={
-                    tasteProfile.summary
-                      ? tasteProfile.summary.length * 30 + 300
-                      : 0
-                  }
-                />
-              ) : null}
+                ) : null}
+              </TouchableOpacity>
             </View>
           )}
 
@@ -565,6 +668,57 @@ ANALYSIS:
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {tasteCardExpanded && tasteProfile && (
+        <>
+          <Pressable style={StyleSheet.absoluteFill} onPress={collapseTasteCard}>
+            <ReanimatedAnimated.View
+              style={[StyleSheet.absoluteFill, tasteCardBackdropStyle]}
+              pointerEvents="none"
+            >
+              <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+              <View style={styles.tasteCardBackdropDim} />
+            </ReanimatedAnimated.View>
+          </Pressable>
+
+          <ReanimatedAnimated.View
+            style={[styles.tasteCardExpandedCard, tasteCardOverlayStyle]}
+          >
+            <ReanimatedAnimated.View
+              style={[styles.tasteCardExpandedInner, tasteCardContentStyle]}
+            >
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                bounces
+                overScrollMode="always"
+                scrollEventThrottle={16}
+                onScroll={handleTasteCardScroll}
+              >
+                {tasteProfile.summary ? (
+                  <Text style={styles.tasteCardExpandedSummary}>
+                    {tasteProfile.summary}
+                  </Text>
+                ) : null}
+                {tasteProfile.analysis ? (
+                  <>
+                    <View style={styles.profileDivider} />
+                    <Text style={styles.tasteCardExpandedAnalysis}>
+                      {tasteProfile.analysis}
+                    </Text>
+                  </>
+                ) : null}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.tasteCardCloseBtn}
+                onPress={collapseTasteCard}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.tasteCardCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </ReanimatedAnimated.View>
+          </ReanimatedAnimated.View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -805,4 +959,47 @@ const styles = StyleSheet.create({
     borderColor: MC.border,
   },
   retryBtnText: { color: MC.textSecondary, fontSize: 12, fontWeight: "600" },
+  tasteCardBackdropDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  tasteCardExpandedCard: {
+    backgroundColor: MC.surface,
+    borderWidth: 1,
+    borderColor: MC.border,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  tasteCardExpandedInner: { flex: 1, padding: 22 },
+  tasteCardExpandedSummary: {
+    color: MC.accent,
+    fontSize: 26,
+    fontWeight: "700",
+    lineHeight: 30,
+    letterSpacing: -0.2,
+  },
+  tasteCardExpandedAnalysis: {
+    color: MC.textPrimary,
+    fontSize: 15,
+    lineHeight: 24,
+    letterSpacing: 0.1,
+  },
+  tasteCardCloseBtn: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: MC.bg,
+    borderWidth: 1,
+    borderColor: MC.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tasteCardCloseBtnText: { color: MC.textSecondary, fontSize: 13, fontWeight: "600" },
 });
