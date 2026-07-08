@@ -262,10 +262,13 @@ export default function ProfileScreen() {
     y: winHeight * 0.075,
   };
 
+  const pullToCloseTriggered = useRef(false);
+
   function expandTasteCard() {
     tasteCardRef.current?.measureInWindow((x, y, width, height) => {
       cardOrigin.value = { x, y, width, height };
       setTasteCardExpanded(true);
+      pullToCloseTriggered.current = false;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       expandProgress.value = withTiming(1, { duration: 380 });
     });
@@ -276,6 +279,16 @@ export default function ProfileScreen() {
     expandProgress.value = withTiming(0, { duration: 300 }, (finished) => {
       if (finished) scheduleOnRN(setTasteCardExpanded, false);
     });
+  }
+
+  function handleTasteCardScroll(e: {
+    nativeEvent: { contentOffset: { y: number } };
+  }) {
+    if (pullToCloseTriggered.current) return;
+    if (e.nativeEvent.contentOffset.y < -70) {
+      pullToCloseTriggered.current = true;
+      collapseTasteCard();
+    }
   }
 
   const tasteCardOverlayStyle = useAnimatedStyle(() => {
@@ -674,7 +687,13 @@ ANALYSIS:
             <ReanimatedAnimated.View
               style={[styles.tasteCardExpandedInner, tasteCardContentStyle]}
             >
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                bounces
+                overScrollMode="always"
+                scrollEventThrottle={16}
+                onScroll={handleTasteCardScroll}
+              >
                 {tasteProfile.summary ? (
                   <Text style={styles.tasteCardExpandedSummary}>
                     {tasteProfile.summary}
