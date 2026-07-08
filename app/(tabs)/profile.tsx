@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   profileCard: { padding: 18 },
   profileSummary: {
     color: MC.accent,
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: "700",
     lineHeight: 23,
     letterSpacing: -0.2,
