@@ -18,6 +18,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -33,6 +34,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { captureRef } from "react-native-view-shot";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ReanimatedAnimated, {
   interpolate,
@@ -140,6 +142,30 @@ function TopArtistRow({ item, index }: { item: SpotifyArtist; index: number }) {
       <View style={styles.topArtistBar}>
         <View style={[styles.topArtistBarFill, { width: barWidth }]} />
       </View>
+    </TouchableOpacity>
+  );
+}
+
+function ShareButton({
+  onPress,
+  loading,
+}: {
+  onPress: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.shareBtn}
+      onPress={onPress}
+      activeOpacity={0.7}
+      disabled={loading}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      {loading ? (
+        <ActivityIndicator color={MC.textMuted} size="small" />
+      ) : (
+        <Text style={styles.shareBtnText}>↗</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -263,6 +289,8 @@ export default function ProfileScreen() {
   };
 
   const pullToCloseTriggered = useRef(false);
+  const shareCardRef = useRef<View>(null);
+  const [sharingImage, setSharingImage] = useState(false);
 
   function expandTasteCard() {
     tasteCardRef.current?.measureInWindow((x, y, width, height) => {
@@ -279,6 +307,25 @@ export default function ProfileScreen() {
     expandProgress.value = withTiming(0, { duration: 300 }, (finished) => {
       if (finished) scheduleOnRN(setTasteCardExpanded, false);
     });
+  }
+
+  async function shareTasteProfile() {
+    if (!tasteProfile || !shareCardRef.current) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSharingImage(true);
+    try {
+      const uri = await captureRef(shareCardRef, { format: "png", quality: 1 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "image/png",
+          dialogTitle: "Share your Caffy taste profile",
+        });
+      }
+    } catch {
+      // user cancelled or capture/share failed — nothing to do
+    } finally {
+      setSharingImage(false);
+    }
   }
 
   function handleTasteCardScroll(e: {
@@ -552,7 +599,10 @@ ANALYSIS:
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Your Music Taste:</Text>
             {tasteProfile && !generating && (
-              <RegenButton onPress={generateProfile} />
+              <View style={styles.sectionHeaderActions}>
+                <ShareButton onPress={shareTasteProfile} loading={sharingImage} />
+                <RegenButton onPress={generateProfile} />
+              </View>
             )}
           </View>
 
@@ -718,6 +768,21 @@ ANALYSIS:
             </ReanimatedAnimated.View>
           </ReanimatedAnimated.View>
         </>
+      )}
+
+      {tasteProfile && (
+        <View style={styles.shareCardHidden} pointerEvents="none">
+          <View ref={shareCardRef} collapsable={false} style={styles.shareCard}>
+            <View style={styles.shareCardBrandRow}>
+              <Text style={styles.shareCardBrandText}>☕ CAFFY</Text>
+            </View>
+            {tasteProfile.summary ? (
+              <Text style={styles.shareCardSummary}>{tasteProfile.summary}</Text>
+            ) : null}
+            <View style={styles.shareCardFooterDivider} />
+            <Text style={styles.shareCardWatermark}>Made with Caffy</Text>
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -900,6 +965,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
+  sectionHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  shareBtn: {
+    padding: 4,
+  },
+  shareBtnText: {
+    color: MC.textMuted,
+    fontSize: 16,
+    fontWeight: "600",
+  },
   regenBtn: {
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -1002,4 +1080,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tasteCardCloseBtnText: { color: MC.textSecondary, fontSize: 13, fontWeight: "600" },
+  shareCardHidden: {
+    position: "absolute",
+    top: 0,
+    left: -3000,
+  },
+  shareCard: {
+    width: 340,
+    padding: 28,
+    backgroundColor: MC.bg,
+    borderWidth: 1,
+    borderColor: MC.border,
+  },
+  shareCardBrandRow: { marginBottom: 24 },
+  shareCardBrandText: {
+    color: MC.accent,
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 3,
+  },
+  shareCardSummary: {
+    color: MC.accent,
+    fontSize: 24,
+    fontWeight: "800",
+    lineHeight: 30,
+    letterSpacing: -0.3,
+    marginBottom: 16,
+  },
+  shareCardFooterDivider: {
+    height: 1,
+    backgroundColor: MC.border,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  shareCardWatermark: {
+    color: MC.textMuted,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textAlign: "right",
+  },
 });
