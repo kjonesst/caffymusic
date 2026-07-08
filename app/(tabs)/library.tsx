@@ -10,6 +10,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { Directory, File, Paths } from "expo-file-system";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -151,10 +152,20 @@ function LocalPlayer({ uri }: { uri: string }) {
 }
 
 function PlaylistRow({ item, index }: { item: SpotifyPlaylist; index: number }) {
+  const router = useRouter();
   const imageUrl = item.images[0]?.url;
   const color = colorForIndex(index);
   return (
-    <TouchableOpacity style={styles.songRow} activeOpacity={0.75}>
+    <TouchableOpacity
+      style={styles.songRow}
+      activeOpacity={0.75}
+      onPress={() =>
+        router.push({
+          pathname: "/playlist/[id]",
+          params: { id: item.id, name: item.name, image: imageUrl ?? "" },
+        })
+      }
+    >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.songArt} />
       ) : (
@@ -164,7 +175,7 @@ function PlaylistRow({ item, index }: { item: SpotifyPlaylist; index: number }) 
       )}
       <View style={styles.songInfo}>
         <Text style={styles.songTitle} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.songArtist}>{item.tracks?.total ?? 0} songs</Text>
+        <Text style={styles.songArtist}>{item.items?.total ?? 0} songs</Text>
       </View>
       <Text style={styles.chevron}>›</Text>
     </TouchableOpacity>

@@ -68,7 +68,7 @@ export type SpotifyPlaylist = {
   name: string;
   description: string;
   images: { url: string }[];
-  tracks: { total: number };
+  items: { total: number };
   owner: { display_name: string };
 };
 
@@ -79,6 +79,18 @@ export async function getSavedTracks(token: string, limit = 30): Promise<Spotify
 
 export async function getPlaylists(token: string, limit = 30): Promise<SpotifyPlaylist[]> {
   const data = await get<{ items: SpotifyPlaylist[] }>(`/me/playlists?limit=${limit}`, token);
+  return data.items;
+}
+
+export async function getPlaylistTracks(
+  token: string,
+  playlistId: string,
+  limit = 50,
+): Promise<SpotifySavedTrack[]> {
+  const data = await get<{ items: SpotifySavedTrack[] }>(
+    `/playlists/${playlistId}/items?limit=${limit}`,
+    token,
+  );
   return data.items;
 }
 
