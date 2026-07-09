@@ -4,7 +4,10 @@ async function get<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Spotify API error: ${res.status} ${body}`);
+  }
   return res.json();
 }
 
@@ -79,18 +82,6 @@ export async function getSavedTracks(token: string, limit = 30): Promise<Spotify
 
 export async function getPlaylists(token: string, limit = 30): Promise<SpotifyPlaylist[]> {
   const data = await get<{ items: SpotifyPlaylist[] }>(`/me/playlists?limit=${limit}`, token);
-  return data.items;
-}
-
-export async function getPlaylistTracks(
-  token: string,
-  playlistId: string,
-  limit = 50,
-): Promise<SpotifySavedTrack[]> {
-  const data = await get<{ items: SpotifySavedTrack[] }>(
-    `/playlists/${playlistId}/items?limit=${limit}`,
-    token,
-  );
   return data.items;
 }
 
