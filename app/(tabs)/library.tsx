@@ -154,7 +154,7 @@ function PlaylistRow({ item, index }: { item: SpotifyPlaylist; index: number }) 
   const imageUrl = item.images[0]?.url;
   const color = colorForIndex(index);
   return (
-    <TouchableOpacity style={styles.songRow} activeOpacity={0.75}>
+    <View style={styles.songRow}>
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.songArt} />
       ) : (
@@ -164,10 +164,9 @@ function PlaylistRow({ item, index }: { item: SpotifyPlaylist; index: number }) 
       )}
       <View style={styles.songInfo}>
         <Text style={styles.songTitle} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.songArtist}>{item.tracks?.total ?? 0} songs</Text>
+        <Text style={styles.songArtist}>{item.items?.total ?? 0} songs</Text>
       </View>
-      <Text style={styles.chevron}>›</Text>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -421,7 +420,6 @@ const styles = StyleSheet.create({
   actionIcon: { fontSize: 20, color: MC.textMuted },
   actionIconActive: { color: MC.accent },
   removeIcon: { fontSize: 14, color: MC.textMuted },
-  chevron: { color: MC.textMuted, fontSize: 24, fontWeight: "300" },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 8 },
   emptyText: { color: MC.textMuted, fontSize: 15 },
   emptyHint: { color: MC.textMuted, fontSize: 13, opacity: 0.6 },

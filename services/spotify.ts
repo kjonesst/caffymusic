@@ -4,7 +4,10 @@ async function get<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Spotify API error: ${res.status} ${body}`);
+  }
   return res.json();
 }
 
@@ -68,7 +71,7 @@ export type SpotifyPlaylist = {
   name: string;
   description: string;
   images: { url: string }[];
-  tracks: { total: number };
+  items: { total: number };
   owner: { display_name: string };
 };
 
