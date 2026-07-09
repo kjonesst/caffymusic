@@ -61,7 +61,7 @@ export async function getNewReleases(token: string, limit = 10): Promise<Spotify
   return data.items.map((i) => i.album);
 }
 
-export type SpotifySavedTrack = {
+type SpotifySavedTrack = {
   added_at: string;
   track: SpotifyTrack & { duration_ms: number };
 };
