@@ -1,4 +1,6 @@
 import MiniPlayer from "@/components/MiniPlayer";
+import { BottomFade } from "@/components/bottom-fade";
+import { TAB_BAR_CLEARANCE } from "@/components/floating-tab-bar";
 import { MC } from "@/constants/theme";
 import { useFavorites } from "@/context/favorites-context";
 import { useSpotifyAuth } from "@/context/spotify-auth-context";
@@ -730,7 +732,11 @@ export default function HomeScreen() {
             </View>
           )}
 
-        <View style={{ height: currentTrack ? 184 : 24 }} />
+        <View
+          style={{
+            height: (currentTrack ? 184 : 24) + TAB_BAR_CLEARANCE,
+          }}
+        />
       </ScrollView>
       {currentTrack && (
         <MiniPlayer
@@ -740,6 +746,7 @@ export default function HomeScreen() {
         />
       )}
       <IntroModal visible={showIntro} onDismiss={dismissIntro} />
+      <BottomFade />
     </SafeAreaView>
   );
 }

@@ -1,10 +1,9 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SpotifyAuthProvider, useSpotifyAuth } from '@/context/spotify-auth-context';
 import { LocalTracksProvider } from '@/context/local-tracks-context';
 import { FavoritesProvider } from '@/context/favorites-context';
@@ -31,10 +30,8 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DarkTheme}>
       <SpotifyAuthProvider>
       <FavoritesProvider>
       <LocalTracksProvider>

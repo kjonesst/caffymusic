@@ -1,34 +1,15 @@
 import { Tabs } from "expo-router";
 import React from "react";
 
-import { HapticTab } from "@/components/haptic-tab";
+import { FloatingTabBar } from "@/components/floating-tab-bar";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Colors, MC } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "dark"].tint,
-        tabBarInactiveTintColor: MC.textMuted,
         headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarStyle: {
-          backgroundColor: MC.surface,
-          borderTopColor: MC.border,
-          borderTopWidth: 1,
-          height: 84,
-          paddingBottom: 28,
-          paddingTop: 10,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
-          letterSpacing: 0.3,
-        },
       }}
     >
       <Tabs.Screen

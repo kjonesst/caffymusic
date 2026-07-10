@@ -1,3 +1,5 @@
+import { BottomFade } from "@/components/bottom-fade";
+import { TAB_BAR_CLEARANCE } from "@/components/floating-tab-bar";
 import { MC } from "@/constants/theme";
 import { useFavorites } from "@/context/favorites-context";
 import { useLocalTracks, LocalTrack } from "@/context/local-tracks-context";
@@ -341,6 +343,7 @@ export default function LibraryScreen() {
       )}
 
       {renderContent()}
+      <BottomFade />
     </SafeAreaView>
   );
 }
@@ -397,7 +400,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
-  listContent: { paddingHorizontal: 20, paddingBottom: 20 },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20 + TAB_BAR_CLEARANCE,
+  },
   songRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10 },
   separator: { height: 1, backgroundColor: MC.border },
   songArt: {
