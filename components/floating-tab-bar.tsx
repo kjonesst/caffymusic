@@ -15,6 +15,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const HIGHLIGHT_WIDTH = 60;
 const HIGHLIGHT_HEIGHT = 48;
 
+// Approx pill height (~62) + a typical safe-area bottom inset (~34) + breathing room.
+export const TAB_BAR_CLEARANCE = 120;
+
 export function FloatingTabBar({
   state,
   descriptors,

@@ -1,4 +1,5 @@
 import { BottomFade } from "@/components/bottom-fade";
+import { TAB_BAR_CLEARANCE } from "@/components/floating-tab-bar";
 import { TypewriterText } from "@/components/typewriter-text";
 import { MC } from "@/constants/theme";
 import { useLocalTracks } from "@/context/local-tracks-context";
@@ -729,7 +730,7 @@ ANALYSIS:
           </View>
         )}
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 24 + TAB_BAR_CLEARANCE }} />
       </ScrollView>
 
       {tasteCardExpanded && tasteProfile && (
