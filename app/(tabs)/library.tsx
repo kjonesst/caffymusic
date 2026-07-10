@@ -1,3 +1,4 @@
+import { BottomFade } from "@/components/bottom-fade";
 import { MC } from "@/constants/theme";
 import { useFavorites } from "@/context/favorites-context";
 import { useLocalTracks, LocalTrack } from "@/context/local-tracks-context";
@@ -341,6 +342,7 @@ export default function LibraryScreen() {
       )}
 
       {renderContent()}
+      <BottomFade />
     </SafeAreaView>
   );
 }

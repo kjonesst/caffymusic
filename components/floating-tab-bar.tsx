@@ -52,89 +52,87 @@ export function FloatingTabBar({
 
   return (
     <View
-      style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      style={[styles.bar, { marginBottom: Math.max(insets.bottom, 12) }]}
+      onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
     >
-      <View style={styles.shadowWrap}>
-        <View style={styles.bar} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
-          <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.barTint} pointerEvents="none" />
+      <BlurView intensity={50} tint="dark" style={styles.blur} />
+      <View style={styles.barTint} pointerEvents="none" />
 
-          {barWidth > 0 && (
+      {barWidth > 0 && (
+        <Animated.View
+          style={[
+            styles.highlight,
+            { transform: [{ translateX: highlightX }] },
+          ]}
+        />
+      )}
+
+      {state.routes.map((route, index) => {
+        const { options } = descriptors[route.key];
+        const isFocused = state.index === index;
+        const label = options.title ?? route.name;
+        const color = isFocused ? MC.accent : MC.textMuted;
+
+        const onPress = () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          const event = navigation.emit({
+            type: "tabPress",
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            accessibilityLabel={label}
+            onPress={onPress}
+            style={styles.tab}
+            activeOpacity={0.8}
+          >
             <Animated.View
-              style={[
-                styles.highlight,
-                { transform: [{ translateX: highlightX }] },
-              ]}
-            />
-          )}
-
-          {state.routes.map((route, index) => {
-            const { options } = descriptors[route.key];
-            const isFocused = state.index === index;
-            const label = options.title ?? route.name;
-            const color = isFocused ? MC.accent : MC.textMuted;
-
-            const onPress = () => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              const event = navigation.emit({
-                type: "tabPress",
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
-              }
-            };
-
-            return (
-              <TouchableOpacity
-                key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={label}
-                onPress={onPress}
-                style={styles.tab}
-                activeOpacity={0.8}
-              >
-                <Animated.View
-                  style={{ transform: [{ scale: iconScales[index] }] }}
-                >
-                  {options.tabBarIcon?.({ focused: isFocused, color, size: 23 })}
-                </Animated.View>
-                <Text style={[styles.label, { color }]}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+              style={{ transform: [{ scale: iconScales[index] }] }}
+            >
+              {options.tabBarIcon?.({ focused: isFocused, color, size: 23 })}
+            </Animated.View>
+            <Text style={[styles.label, { color }]}>{label}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    backgroundColor: "transparent",
-  },
-  shadowWrap: {
+  bar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 0,
+    flexDirection: "row",
     borderRadius: 28,
+    borderWidth: 1,
+    borderColor: MC.border,
+    backgroundColor: MC.surface,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 10,
   },
-  bar: {
-    flexDirection: "row",
+  blur: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: 28,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: MC.border,
-    backgroundColor: MC.surface,
   },
   barTint: {
     ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
     backgroundColor: `${MC.bg}66`,
   },
   highlight: {

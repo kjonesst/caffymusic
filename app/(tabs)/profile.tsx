@@ -1,3 +1,4 @@
+import { BottomFade } from "@/components/bottom-fade";
 import { TypewriterText } from "@/components/typewriter-text";
 import { MC } from "@/constants/theme";
 import { useLocalTracks } from "@/context/local-tracks-context";
@@ -807,6 +808,7 @@ ANALYSIS:
           </View>
         </View>
       )}
+      <BottomFade />
     </SafeAreaView>
   );
 }
